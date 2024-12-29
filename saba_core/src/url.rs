@@ -70,7 +70,7 @@ impl Url {
     fn extract_port(&self) -> String {
         let url_parts: Vec<&str> = self
             .url
-            .trim_start_matches("http;//")
+            .trim_start_matches("http://")
             .splitn(2, '/')
             .collect();
         if let Some(index) = url_parts[0].find(':') {
@@ -107,5 +107,89 @@ impl Url {
             return "".to_string();
         }
         path_and_searchpart[1].to_string()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_url_host() {
+        let url = "http://example.com".to_string();
+        let expected = Ok(Url {
+            url: url.clone(),
+            host: "example.com".to_string(),
+            port: "80".to_string(),
+            path: "".to_string(),
+            searchpart: "".to_string(),
+        });
+        assert_eq!(expected, Url::new(url).parse());
+    }
+
+    #[test]
+    fn test_url_host_port() {
+        let url = "http://example.com:8888".to_string();
+        let expected = Ok(Url {
+            url: url.clone(),
+            host: "example.com".to_string(),
+            port: "8888".to_string(),
+            path: "".to_string(),
+            searchpart: "".to_string(),
+        });
+        assert_eq!(expected, Url::new(url).parse());
+    }
+
+    #[test]
+    fn test_url_host_port_path() {
+        let url = "http://example.com:8888/index.html".to_string();
+        let expected = Ok(Url {
+            url: url.clone(),
+            host: "example.com".to_string(),
+            port: "8888".to_string(),
+            path: "index.html".to_string(),
+            searchpart: "".to_string(),
+        });
+        assert_eq!(expected, Url::new(url).parse());
+    }
+
+    #[test]
+    fn test_url_host_path() {
+        let url = "http://example.com/index.html".to_string();
+        let expected = Ok(Url {
+            url: url.clone(),
+            host: "example.com".to_string(),
+            port: "80".to_string(),
+            path: "index.html".to_string(),
+            searchpart: "".to_string(),
+        });
+        assert_eq!(expected, Url::new(url).parse());
+    }
+
+    #[test]
+    fn test_url_host_path_searchquery() {
+        let url = "http://example.com:8888/index.html?a=123&b=456".to_string();
+        let expected = Ok(Url {
+            url: url.clone(),
+            host: "example.com".to_string(),
+            port: "8888".to_string(),
+            path: "index.html".to_string(),
+            searchpart: "a=123&b=456".to_string(),
+        });
+        assert_eq!(expected, Url::new(url).parse());
+    }
+
+    #[test]
+    fn test_no_scheme() {
+        let url = "example.com".to_string();
+        let expected = Err("Only HTTP scheme is supported.".to_string());
+        assert_eq!(expected, Url::new(url).parse());
+    }
+
+    #[test]
+    fn test_unsupported_scheme() {
+        let url = "https://example.com:8888/index.html".to_string();
+        let expected = Err("Only HTTP scheme is supported.".to_string());
+        assert_eq!(expected, Url::new(url).parse());
     }
 }
