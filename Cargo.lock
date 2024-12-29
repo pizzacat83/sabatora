@@ -111,6 +111,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "saba_core"
+version = "0.1.0"
+
+[[package]]
 name = "sabi"
 version = "0.1.0"
 source = "git+https://github.com/hikalium/wasabi.git?branch=for_saba#abf27c6f587e777fce5c53234d45d997ed075996"
