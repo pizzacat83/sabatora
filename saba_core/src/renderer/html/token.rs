@@ -90,6 +90,19 @@ impl HtmlTokenizer {
         assert!(self.pos > 0);
         self.pos -= 1;
     }
+
+    fn set_self_closing_flag(&mut self) {
+        if let Some(HtmlToken::StartTag {
+            tag: _,
+            ref mut self_closing,
+            attributes: _,
+        }) = &mut self.latest_token
+        {
+            *self_closing = true;
+        } else {
+            panic!("set_self_closing_flag: latest_token is not StartTag");
+        }
+    }
 }
 
 // https://html.spec.whatwg.org/multipage/parsing.html#parse-state
@@ -203,6 +216,9 @@ impl Iterator for HtmlTokenizer {
                 State::TagName => {
                     let c = self.consume_next_input();
                     match c {
+                        Some('/') => {
+                            self.state = State::SelfClosingStartTag;
+                        }
                         Some('>') => {
                             self.state = State::Data;
                             return self.take_latest_token();
@@ -214,6 +230,17 @@ impl Iterator for HtmlTokenizer {
                             // todo
                             self.append_tag_name(c);
                         }
+                    }
+                }
+                State::SelfClosingStartTag => {
+                    let c = self.consume_next_input();
+                    match c {
+                        Some('>') => {
+                            self.set_self_closing_flag();
+                            self.state = State::Data;
+                            return self.take_latest_token();
+                        }
+                        _ => todo!(),
                     }
                 }
 
@@ -250,6 +277,20 @@ mod tests {
                 tag: "body".to_string(),
             },
         ];
+        for e in expected {
+            assert_eq!(Some(e), tokenizer.next());
+        }
+    }
+
+    #[test]
+    fn test_self_closing_tag() {
+        let html = "<img/>".to_string();
+        let mut tokenizer = HtmlTokenizer::new(html);
+        let expected = [HtmlToken::StartTag {
+            tag: "img".to_string(),
+            self_closing: true,
+            attributes: Vec::new(),
+        }];
         for e in expected {
             assert_eq!(Some(e), tokenizer.next());
         }
