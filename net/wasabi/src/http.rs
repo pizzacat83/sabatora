@@ -1,4 +1,6 @@
 extern crate alloc;
+use core::f32::consts::LN_10;
+
 use alloc::format;
 use alloc::string::{String, ToString};
 use alloc::vec::Vec;
@@ -22,15 +24,10 @@ impl HttpClient {
 
         let socket_addr: SocketAddr = (ips[0], port).into();
 
-        let mut stream = match TcpStream::connect(socket_addr) {
-            Ok(stream) => stream,
-            Err(_) => {
-                return Err(Error::Network(
-                    "Failed to connect to TCP stream".to_string(),
-                ));
-            }
-        };
+        let mut stream = TcpStream::connect(socket_addr)
+            .map_err(|err| Error::Network("Failed to connect to TCP stream".to_string()))?;
 
+         
         let mut request = String::from("GET /");
         request.push_str(&path);
         request.push_str(" HTTP/1.1\n");
