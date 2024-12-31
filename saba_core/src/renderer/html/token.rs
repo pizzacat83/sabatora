@@ -197,16 +197,17 @@ pub enum State {
     AfterAttributeValueQuoted,
     /// https://html.spec.whatwg.org/multipage/parsing.html#self-closing-start-tag-state
     SelfClosingStartTag,
-    /// https://html.spec.whatwg.org/multipage/parsing.html#script-data-state
-    ScriptData,
-    /// https://html.spec.whatwg.org/multipage/parsing.html#script-data-less-than-state
-    ScriptDataLessThanSign,
-    /// https://html.spec.whatwg.org/multipage/parsing.html#script-data-end-tag-open-state
-    ScriptDataEndTagOpen,
-    /// https://html.spec.whatwg.org/multipage/parsing.html#script-data-end-tag-name
-    ScriptDataEndTagName,
-    /// https://html.spec.whatwg.org/multipage/parsing.html#temporary-buffer
-    TemporaryBuffer,
+    // TODO
+    // /// https://html.spec.whatwg.org/multipage/parsing.html#script-data-state
+    // ScriptData,
+    // /// https://html.spec.whatwg.org/multipage/parsing.html#script-data-less-than-state
+    // ScriptDataLessThanSign,
+    // /// https://html.spec.whatwg.org/multipage/parsing.html#script-data-end-tag-open-state
+    // ScriptDataEndTagOpen,
+    // /// https://html.spec.whatwg.org/multipage/parsing.html#script-data-end-tag-name
+    // ScriptDataEndTagName,
+    // /// https://html.spec.whatwg.org/multipage/parsing.html#temporary-buffer
+    // TemporaryBuffer,
 }
 
 impl Iterator for HtmlTokenizer {
@@ -526,6 +527,33 @@ mod tests {
             self_closing: false,
             attributes: vec![attr_class, attr_id, attr_foo],
         }];
+        for e in expected {
+            assert_eq!(Some(e), tokenizer.next());
+        }
+    }
+
+    #[test]
+    fn test_script_tag() {
+        let html = "<script>alert(1)</script>".to_string();
+        let mut tokenizer = HtmlTokenizer::new(html);
+        let expected = [
+            HtmlToken::StartTag {
+                tag: "script".to_string(),
+                self_closing: false,
+                attributes: Vec::new(),
+            },
+            HtmlToken::Char('a'),
+            HtmlToken::Char('l'),
+            HtmlToken::Char('e'),
+            HtmlToken::Char('r'),
+            HtmlToken::Char('t'),
+            HtmlToken::Char('('),
+            HtmlToken::Char('1'),
+            HtmlToken::Char(')'),
+            HtmlToken::EndTag {
+                tag: "script".to_string(),
+            },
+        ];
         for e in expected {
             assert_eq!(Some(e), tokenizer.next());
         }
