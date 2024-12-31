@@ -2,8 +2,6 @@ use core::panic;
 
 use alloc::{string::String, vec, vec::Vec};
 
-use crate::renderer::html::attribute;
-
 use super::attribute::Attribute;
 
 /// The output of the tokenization step is a series of zero or more of the following tokens: DOCTYPE, start tag, end tag, comment, character, end-of-file.
@@ -23,7 +21,7 @@ pub enum HtmlToken {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct HtmlTokenizer {
+struct HtmlTokenizeStateMachine {
     state: State,
     pos: usize,
     latest_token: Option<HtmlToken>,
@@ -31,7 +29,29 @@ pub struct HtmlTokenizer {
     buf: String,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct HtmlTokenizer {
+    state_machine: HtmlTokenizeStateMachine,
+    eof_observed: bool,
+    yielded_tokens: Vec<HtmlToken>,
+}
 impl HtmlTokenizer {
+    pub fn new(html: String) -> Self {
+        Self {
+            state_machine: HtmlTokenizeStateMachine::new(html),
+            eof_observed: false,
+            yielded_tokens: Vec::new(),
+        }
+    }
+
+    fn take_remaining_token(&mut self) -> Option<HtmlToken> {
+        if !self.yielded_tokens.is_empty() {
+            return Some(self.yielded_tokens.remove(0));
+        }
+        None
+    }
+}
+impl HtmlTokenizeStateMachine {
     pub fn new(html: String) -> Self {
         Self {
             state: State::Data,
@@ -79,9 +99,9 @@ impl HtmlTokenizer {
         }
     }
 
-    fn take_latest_token(&mut self) -> Option<HtmlToken> {
+    fn take_latest_token(&mut self) -> HtmlToken {
         assert!(self.latest_token.is_some());
-        let token = self.latest_token.clone();
+        let token = self.latest_token.clone().unwrap();
         self.latest_token = None;
         assert!(self.latest_token.is_none());
 
@@ -192,233 +212,255 @@ pub enum State {
 impl Iterator for HtmlTokenizer {
     type Item = HtmlToken;
     fn next(&mut self) -> Option<Self::Item> {
-        if self.pos >= self.input.len() {
+        if self.eof_observed {
             return None;
         }
         loop {
-            match self.state {
-                State::Data => {
-                    let c = self.consume_next_input();
-                    match c {
-                        Some('&') => {
-                            todo!()
-                        }
-                        Some('<') => {
-                            self.state = State::TagOpen;
-                        }
-                        None => {
-                            return Some(HtmlToken::Eof);
-                        }
-                        Some(c) => {
-                            return Some(HtmlToken::Char(c));
-                        }
-                    }
+            if let Some(token) = self.take_remaining_token() {
+                if token == HtmlToken::Eof {
+                    self.eof_observed = true;
                 }
-                State::TagOpen => {
-                    let c = self.consume_next_input();
-                    match c {
-                        Some('/') => {
-                            self.state = State::EndTagOpen;
-                        }
-                        Some(c) if c.is_ascii_alphabetic() => {
-                            self.create_tag(true);
-                            self.reconsume();
-                            self.state = State::TagName;
-                        }
-                        Some('?') => {
-                            todo!()
-                        }
-                        Some(_) => {
-                            self.reconsume();
-                            return Some(HtmlToken::Char('<'));
-                        }
-                        None => {
-                            // return vec![HtmlToken::Char('<'), HtmlToken::Eof];
-                            return Some(HtmlToken::Char('<'));
-                        }
-                    }
-                }
-                State::EndTagOpen => {
-                    let c = self.consume_next_input();
-                    match c {
-                        Some(c) if c.is_ascii_alphabetic() => {
-                            self.create_tag(false);
-                            self.reconsume();
-                            self.state = State::TagName;
-                        }
-                        Some('>') => {
-                            self.state = State::Data;
-                        }
-                        None => {
-                            // TODO: </ EOF
-                            return Some(HtmlToken::Eof);
-                        }
-                        Some(_) => todo!(),
-                    }
-                }
-                State::TagName => {
-                    let c = self.consume_next_input();
-                    match c {
-                        Some('\t' | '\n' | '\x0c' | ' ') => {
-                            self.state = State::BeforeAttributeName;
-                        }
-                        Some('/') => {
-                            self.state = State::SelfClosingStartTag;
-                        }
-                        Some('>') => {
-                            self.state = State::Data;
-                            return self.take_latest_token();
-                        }
-                        None => {
-                            return Some(HtmlToken::Eof);
-                        }
-                        Some(c) => {
-                            // todo
-                            self.append_tag_name(c);
-                        }
-                    }
-                }
-                State::SelfClosingStartTag => {
-                    let c = self.consume_next_input();
-                    match c {
-                        Some('>') => {
-                            self.set_self_closing_flag();
-                            self.state = State::Data;
-                            return self.take_latest_token();
-                        }
-                        _ => todo!(),
-                    }
-                }
-                State::BeforeAttributeName => {
-                    let c = self.consume_next_input();
-                    match c {
-                        Some('\t' | '\n' | '\x0c' | ' ') => {
-                            // ignore
-                        }
-                        None => {
-                            self.state = State::AfterAttributeName;
-                        }
-                        Some(_) => {
-                            self.state = State::AttributeName;
-                            self.reconsume();
-                            self.start_new_attribute();
-                        }
-                    }
-                }
-                State::AttributeName => {
-                    let c = self.consume_next_input();
-                    match c {
-                        None => {
-                            self.reconsume();
-                            self.state = State::AfterAttributeName;
-                        }
-                        Some('=') => {
-                            self.state = State::BeforeAttributeValue;
-                        }
-                        Some(c) => {
-                            self.append_attribute_name(c);
-                        }
-                    }
-                }
-                State::AfterAttributeName => {
-                    let c = self.consume_next_input();
-                    match c {
-                        Some('=') => {
-                            self.state = State::BeforeAttributeValue;
-                        }
-                        None => {
-                            return Some(HtmlToken::Eof);
-                        }
-                        Some(_) => todo!(),
-                    }
-                }
-                State::BeforeAttributeValue => {
-                    let c = self.consume_next_input();
-                    match c {
-                        Some('"') => {
-                            self.state = State::AttributeValueDoubleQuoted;
-                        }
-                        Some('\'') => {
-                            self.state = State::AttributeValueSingleQuoted;
-                        }
-
-                        Some(_) | None => {
-                            self.reconsume();
-                            self.state = State::AttributeValueUnquoted;
-                        }
-                    }
-                }
-                State::AttributeValueDoubleQuoted => {
-                    let c = self.consume_next_input();
-                    match c {
-                        Some('"') => {
-                            self.state = State::AfterAttributeValueQuoted;
-                        }
-                        None => {
-                            return Some(HtmlToken::Eof);
-                        }
-                        Some(c) => {
-                            self.append_attribute_value(c);
-                        }
-                    }
-                }
-                State::AttributeValueSingleQuoted => {
-                    let c = self.consume_next_input();
-                    match c {
-                        Some('\'') => {
-                            self.state = State::AfterAttributeValueQuoted;
-                        }
-                        None => {
-                            return Some(HtmlToken::Eof);
-                        }
-                        Some(c) => {
-                            self.append_attribute_value(c);
-                        }
-                    }
-                }
-                State::AttributeValueUnquoted => {
-                    let c = self.consume_next_input();
-                    match c {
-                        Some('\t' | '\n' | '\x0c' | ' ') => {
-                            self.state = State::BeforeAttributeName;
-                        }
-                        Some('>') => {
-                            self.state = State::Data;
-                            return self.take_latest_token();
-                        }
-                        None => {
-                            return Some(HtmlToken::Eof);
-                        }
-                        Some(c) => {
-                            self.append_attribute_value(c);
-                        }
-                    }
-                }
-                State::AfterAttributeValueQuoted => {
-                    let c = self.consume_next_input();
-                    match c {
-                        Some('\t' | '\n' | '\x0c' | ' ') => {
-                            self.state = State::BeforeAttributeName;
-                        }
-                        Some('/') => {
-                            self.state = State::SelfClosingStartTag;
-                        }
-                        Some('>') => {
-                            self.state = State::Data;
-                            return self.take_latest_token();
-                        }
-                        None => {
-                            return Some(HtmlToken::Eof);
-                        }
-                        Some(_) => {
-                            self.reconsume();
-                            self.state = State::BeforeAttributeName;
-                        }
-                    }
-                }
-
-                _ => unimplemented!(),
+                return Some(token);
             }
+            if let Some(tokens) = self.state_machine.step() {
+                self.yielded_tokens = tokens;
+            }
+        }
+    }
+}
+impl HtmlTokenizeStateMachine {
+    fn step(&mut self) -> Option<Vec<HtmlToken>> {
+        match self.state {
+            State::Data => {
+                let c = self.consume_next_input();
+                match c {
+                    Some('&') => {
+                        todo!()
+                    }
+                    Some('<') => {
+                        self.state = State::TagOpen;
+                        None
+                    }
+                    None => Some(vec![HtmlToken::Eof]),
+                    Some(c) => Some(vec![HtmlToken::Char(c)]),
+                }
+            }
+            State::TagOpen => {
+                let c = self.consume_next_input();
+                match c {
+                    Some('/') => {
+                        self.state = State::EndTagOpen;
+                        None
+                    }
+                    Some(c) if c.is_ascii_alphabetic() => {
+                        self.create_tag(true);
+                        self.reconsume();
+                        self.state = State::TagName;
+                        None
+                    }
+                    Some('?') => {
+                        todo!()
+                    }
+                    Some(_) => {
+                        self.reconsume();
+                        Some(vec![HtmlToken::Char('<')])
+                    }
+                    None => Some(vec![HtmlToken::Char('<'), HtmlToken::Eof]),
+                }
+            }
+            State::EndTagOpen => {
+                let c = self.consume_next_input();
+                match c {
+                    Some(c) if c.is_ascii_alphabetic() => {
+                        self.create_tag(false);
+                        self.reconsume();
+                        self.state = State::TagName;
+                        None
+                    }
+                    Some('>') => {
+                        self.state = State::Data;
+                        None
+                    }
+                    None => Some(vec![
+                        HtmlToken::Char('<'),
+                        HtmlToken::Char('/'),
+                        HtmlToken::Eof,
+                    ]),
+                    Some(_) => todo!(),
+                }
+            }
+            State::TagName => {
+                let c = self.consume_next_input();
+                match c {
+                    Some('\t' | '\n' | '\x0c' | ' ') => {
+                        self.state = State::BeforeAttributeName;
+                        None
+                    }
+                    Some('/') => {
+                        self.state = State::SelfClosingStartTag;
+                        None
+                    }
+                    Some('>') => {
+                        self.state = State::Data;
+                        Some(vec![self.take_latest_token()])
+                    }
+                    None => Some(vec![HtmlToken::Eof]),
+                    Some(c) => {
+                        // todo
+                        self.append_tag_name(c);
+                        None
+                    }
+                }
+            }
+            State::SelfClosingStartTag => {
+                let c = self.consume_next_input();
+                match c {
+                    Some('>') => {
+                        self.set_self_closing_flag();
+                        self.state = State::Data;
+                        Some(vec![self.take_latest_token()])
+                    }
+                    _ => todo!(),
+                }
+            }
+            State::BeforeAttributeName => {
+                let c = self.consume_next_input();
+                match c {
+                    Some('\t' | '\n' | '\x0c' | ' ') => {
+                        // ignore
+                        None
+                    }
+                    None => {
+                        self.state = State::AfterAttributeName;
+                        None
+                    }
+                    Some(_) => {
+                        self.state = State::AttributeName;
+                        self.reconsume();
+                        self.start_new_attribute();
+                        None
+                    }
+                }
+            }
+            State::AttributeName => {
+                let c = self.consume_next_input();
+                match c {
+                    None => {
+                        self.reconsume();
+                        self.state = State::AfterAttributeName;
+                        None
+                    }
+                    Some('=') => {
+                        self.state = State::BeforeAttributeValue;
+                        None
+                    }
+                    Some(c) => {
+                        self.append_attribute_name(c);
+                        None
+                    }
+                }
+            }
+            State::AfterAttributeName => {
+                let c = self.consume_next_input();
+                match c {
+                    Some('=') => {
+                        self.state = State::BeforeAttributeValue;
+                        None
+                    }
+                    None => Some(vec![HtmlToken::Eof]),
+                    Some(_) => todo!(),
+                }
+            }
+            State::BeforeAttributeValue => {
+                let c = self.consume_next_input();
+                match c {
+                    Some('"') => {
+                        self.state = State::AttributeValueDoubleQuoted;
+                        None
+                    }
+                    Some('\'') => {
+                        self.state = State::AttributeValueSingleQuoted;
+                        None
+                    }
+
+                    Some(_) | None => {
+                        self.reconsume();
+                        self.state = State::AttributeValueUnquoted;
+                        None
+                    }
+                }
+            }
+            State::AttributeValueDoubleQuoted => {
+                let c = self.consume_next_input();
+                match c {
+                    Some('"') => {
+                        self.state = State::AfterAttributeValueQuoted;
+                        None
+                    }
+                    None => Some(vec![HtmlToken::Eof]),
+                    Some(c) => {
+                        self.append_attribute_value(c);
+                        None
+                    }
+                }
+            }
+            State::AttributeValueSingleQuoted => {
+                let c = self.consume_next_input();
+                match c {
+                    Some('\'') => {
+                        self.state = State::AfterAttributeValueQuoted;
+                        None
+                    }
+                    None => Some(vec![HtmlToken::Eof]),
+                    Some(c) => {
+                        self.append_attribute_value(c);
+                        None
+                    }
+                }
+            }
+            State::AttributeValueUnquoted => {
+                let c = self.consume_next_input();
+                match c {
+                    Some('\t' | '\n' | '\x0c' | ' ') => {
+                        self.state = State::BeforeAttributeName;
+                        None
+                    }
+                    Some('>') => {
+                        self.state = State::Data;
+                        Some(vec![self.take_latest_token()])
+                    }
+                    None => Some(vec![HtmlToken::Eof]),
+                    Some(c) => {
+                        self.append_attribute_value(c);
+                        None
+                    }
+                }
+            }
+            State::AfterAttributeValueQuoted => {
+                let c = self.consume_next_input();
+                match c {
+                    Some('\t' | '\n' | '\x0c' | ' ') => {
+                        self.state = State::BeforeAttributeName;
+                        None
+                    }
+                    Some('/') => {
+                        self.state = State::SelfClosingStartTag;
+                        None
+                    }
+                    Some('>') => {
+                        self.state = State::Data;
+                        Some(vec![self.take_latest_token()])
+                    }
+                    None => Some(vec![HtmlToken::Eof]),
+                    Some(_) => {
+                        self.reconsume();
+                        self.state = State::BeforeAttributeName;
+                        None
+                    }
+                }
+            }
+
+            _ => unimplemented!(),
         }
     }
 }
@@ -433,7 +475,10 @@ mod tests {
     fn test_empty() {
         let html = "".to_string();
         let mut tokenizer = HtmlTokenizer::new(html);
-        assert_eq!(None, tokenizer.next());
+        let expected = [HtmlToken::Eof];
+        for e in expected {
+            assert_eq!(Some(e), tokenizer.next());
+        }
     }
 
     #[test]
