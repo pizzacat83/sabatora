@@ -1,6 +1,10 @@
 use core::panic;
 
-use alloc::{string::String, vec, vec::Vec};
+use alloc::{
+    string::{String, ToString},
+    vec,
+    vec::Vec,
+};
 
 use super::attribute::Attribute;
 
@@ -8,6 +12,9 @@ use super::attribute::Attribute;
 /// https://html.spec.whatwg.org/multipage/parsing.html#data-state:~:text=The%20output%20of%20the%20tokenization%20step%20is%20a%20series%20of%20zero%20or%20more%20of%20the%20following%20tokens%3A%20DOCTYPE%2C%20start%20tag%2C%20end%20tag%2C%20comment%2C%20character%2C%20end%2Dof%2Dfile.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum HtmlToken {
+    DoctypeTag {
+        name: Option<String>,
+    },
     StartTag {
         tag: String,
         self_closing: bool,
@@ -69,6 +76,18 @@ impl HtmlTokenizeStateMachine {
         let c = self.input[self.pos];
         self.pos += 1;
         Some(c)
+    }
+
+    fn try_consume_const_insensitive(&mut self, s: &str) -> bool {
+        for (i, c) in s.chars().enumerate() {
+            if self.pos + i >= self.input.len()
+                || self.input[self.pos + i].to_ascii_lowercase() != c.to_ascii_lowercase()
+            {
+                return false;
+            }
+        }
+        self.pos += s.len();
+        true
     }
 
     fn create_tag(&mut self, start_tag_token: bool) {
@@ -166,6 +185,23 @@ impl HtmlTokenizeStateMachine {
             panic!("append_attribute_value: latest_token is not StartTag");
         }
     }
+
+    fn create_doctype(&mut self, c: char) {
+        self.latest_token = Some(HtmlToken::DoctypeTag {
+            name: Some(c.to_string()),
+        });
+    }
+
+    fn append_doctype_name(&mut self, c: char) {
+        if let Some(HtmlToken::DoctypeTag {
+            name: Some(ref mut name),
+        }) = &mut self.latest_token
+        {
+            name.push(c);
+        } else {
+            panic!("append_doctype_name: latest_token is not DoctypeTag");
+        }
+    }
 }
 
 // https://html.spec.whatwg.org/multipage/parsing.html#parse-state
@@ -197,6 +233,10 @@ pub enum State {
     AfterAttributeValueQuoted,
     /// https://html.spec.whatwg.org/multipage/parsing.html#self-closing-start-tag-state
     SelfClosingStartTag,
+    MarkupDeclarationOpen,
+    Doctype,
+    BeforeDoctypeName,
+    DoctypeName,
     // TODO
     // /// https://html.spec.whatwg.org/multipage/parsing.html#script-data-state
     // ScriptData,
@@ -249,6 +289,10 @@ impl HtmlTokenizeStateMachine {
             State::TagOpen => {
                 let c = self.consume_next_input();
                 match c {
+                    Some('!') => {
+                        self.state = State::MarkupDeclarationOpen;
+                        None
+                    }
                     Some('/') => {
                         self.state = State::EndTagOpen;
                         None
@@ -460,7 +504,51 @@ impl HtmlTokenizeStateMachine {
                     }
                 }
             }
-
+            State::MarkupDeclarationOpen => {
+                if self.try_consume_const_insensitive("doctype") {
+                    self.state = State::Doctype;
+                    None
+                } else {
+                    todo!()
+                }
+            }
+            State::Doctype => {
+                let c = self.consume_next_input();
+                match c {
+                    Some('\t' | '\n' | '\x0c' | ' ') => {
+                        self.state = State::BeforeDoctypeName;
+                        None
+                    }
+                    Some(_) => todo!(),
+                    None => Some(vec![HtmlToken::DoctypeTag { name: None }, HtmlToken::Eof]),
+                }
+            }
+            State::BeforeDoctypeName => {
+                let c = self.consume_next_input();
+                match c {
+                    Some('\t' | '\n' | '\x0c' | ' ') => None,
+                    Some(c) => {
+                        self.state = State::DoctypeName;
+                        self.create_doctype(c);
+                        None
+                    }
+                    None => Some(vec![HtmlToken::DoctypeTag { name: None }, HtmlToken::Eof]),
+                }
+            }
+            State::DoctypeName => {
+                let c = self.consume_next_input();
+                match c {
+                    Some('>') => {
+                        self.state = State::Data;
+                        Some(vec![self.take_latest_token()])
+                    }
+                    None => Some(vec![self.take_latest_token(), HtmlToken::Eof]),
+                    Some(c) => {
+                        self.append_doctype_name(c);
+                        None
+                    }
+                }
+            }
             _ => unimplemented!(),
         }
     }
@@ -552,6 +640,28 @@ mod tests {
             HtmlToken::Char(')'),
             HtmlToken::EndTag {
                 tag: "script".to_string(),
+            },
+        ];
+        for e in expected {
+            assert_eq!(Some(e), tokenizer.next());
+        }
+    }
+
+    #[test]
+    fn test_doctype() {
+        let html = "<!doctype html><body></body>".to_string();
+        let mut tokenizer = HtmlTokenizer::new(html);
+        let expected = [
+            HtmlToken::DoctypeTag {
+                name: Some("html".to_string()),
+            },
+            HtmlToken::StartTag {
+                tag: "body".to_string(),
+                self_closing: false,
+                attributes: Vec::new(),
+            },
+            HtmlToken::EndTag {
+                tag: "body".to_string(),
             },
         ];
         for e in expected {
