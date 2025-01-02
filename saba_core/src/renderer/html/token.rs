@@ -9,7 +9,7 @@ use alloc::{
 use super::attribute::Attribute;
 
 /// The output of the tokenization step is a series of zero or more of the following tokens: DOCTYPE, start tag, end tag, comment, character, end-of-file.
-/// https://html.spec.whatwg.org/multipage/parsing.html#data-state:~:text=The%20output%20of%20the%20tokenization%20step%20is%20a%20series%20of%20zero%20or%20more%20of%20the%20following%20tokens%3A%20DOCTYPE%2C%20start%20tag%2C%20end%20tag%2C%20comment%2C%20character%2C%20end%2Dof%2Dfile.
+/// ([reference](https://html.spec.whatwg.org/multipage/parsing.html#data-state:~:text=The%20output%20of%20the%20tokenization%20step%20is%20a%20series%20of%20zero%20or%20more%20of%20the%20following%20tokens%3A%20DOCTYPE%2C%20start%20tag%2C%20end%20tag%2C%20comment%2C%20character%2C%20end%2Dof%2Dfile.))
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum HtmlToken {
     DoctypeTag {
@@ -195,49 +195,49 @@ impl HtmlTokenizeStateMachine {
     }
 }
 
-// https://html.spec.whatwg.org/multipage/parsing.html#parse-state
+/// <https://html.spec.whatwg.org/multipage/parsing.html#parse-state>
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum State {
-    /// https://html.spec.whatwg.org/multipage/parsing.html#data-state
+    /// <https://html.spec.whatwg.org/multipage/parsing.html#data-state>
     Data,
-    /// https://html.spec.whatwg.org/multipage/parsing.html#tag-open-state
+    /// <https://html.spec.whatwg.org/multipage/parsing.html#tag-open-state>
     TagOpen,
-    /// https://html.spec.whatwg.org/multipage/parsing.html#end-tag-open-state
+    /// <https://html.spec.whatwg.org/multipage/parsing.html#end-tag-open-state>
     EndTagOpen,
-    /// https://html.spec.whatwg.org/multipage/parsing.html#tag-name-state
+    /// <https://html.spec.whatwg.org/multipage/parsing.html#tag-name-state>
     TagName,
-    /// https://html.spec.whatwg.org/multipage/parsing.html#before-attribute-name-state
+    /// <https://html.spec.whatwg.org/multipage/parsing.html#before-attribute-name-state>
     BeforeAttributeName,
-    /// https://html.spec.whatwg.org/multipage/parsing.html#attribute-name-state
+    /// <https://html.spec.whatwg.org/multipage/parsing.html#attribute-name-state>
     AttributeName,
-    /// https://html.spec.whatwg.org/multipage/parsing.html#after-attribute-name-state
+    /// <https://html.spec.whatwg.org/multipage/parsing.html#after-attribute-name-state>
     AfterAttributeName,
-    /// https://html.spec.whatwg.org/multipage/parsing.html#before-attribute-value-state
+    /// <https://html.spec.whatwg.org/multipage/parsing.html#before-attribute-value-state>
     BeforeAttributeValue,
-    /// https://html.spec.whatwg.org/multipage/parsing.html#attribute-value-(double-quoted)-state
+    /// <https://html.spec.whatwg.org/multipage/parsing.html#attribute-value-(double-quoted)-state>
     AttributeValueDoubleQuoted,
-    /// https://html.spec.whatwg.org/multipage/parsing.html#attribute-value-(single-quoted)-state
+    /// <https://html.spec.whatwg.org/multipage/parsing.html#attribute-value-(single-quoted)-state>
     AttributeValueSingleQuoted,
-    /// https://html.spec.whatwg.org/multipage/parsing.html#attribute-value-(unquoted)-state
+    /// <https://html.spec.whatwg.org/multipage/parsing.html#attribute-value-(unquoted)-state>
     AttributeValueUnquoted,
-    /// https://html.spec.whatwg.org/multipage/parsing.html#after-attribute-value-(quoted)-state
+    /// <https://html.spec.whatwg.org/multipage/parsing.html#after-attribute-value-(quoted)-state>
     AfterAttributeValueQuoted,
-    /// https://html.spec.whatwg.org/multipage/parsing.html#self-closing-start-tag-state
+    /// <https://html.spec.whatwg.org/multipage/parsing.html#self-closing-start-tag-state>
     SelfClosingStartTag,
     MarkupDeclarationOpen,
     Doctype,
     BeforeDoctypeName,
     DoctypeName,
     // TODO
-    // /// https://html.spec.whatwg.org/multipage/parsing.html#script-data-state
+    // /// <https://html.spec.whatwg.org/multipage/parsing.html#script-data-state>
     // ScriptData,
-    // /// https://html.spec.whatwg.org/multipage/parsing.html#script-data-less-than-state
+    // /// <https://html.spec.whatwg.org/multipage/parsing.html#script-data-less-than-state>
     // ScriptDataLessThanSign,
-    // /// https://html.spec.whatwg.org/multipage/parsing.html#script-data-end-tag-open-state
+    // /// <https://html.spec.whatwg.org/multipage/parsing.html#script-data-end-tag-open-state>
     // ScriptDataEndTagOpen,
-    // /// https://html.spec.whatwg.org/multipage/parsing.html#script-data-end-tag-name
+    // /// <https://html.spec.whatwg.org/multipage/parsing.html#script-data-end-tag-name>
     // ScriptDataEndTagName,
-    // /// https://html.spec.whatwg.org/multipage/parsing.html#temporary-buffer
+    // /// <https://html.spec.whatwg.org/multipage/parsing.html#temporary-buffer>
     // TemporaryBuffer,
 }
 
