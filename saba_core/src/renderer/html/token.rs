@@ -118,15 +118,6 @@ impl HtmlTokenizeStateMachine {
         }
     }
 
-    fn take_latest_token(&mut self) -> HtmlToken {
-        assert!(self.latest_token.is_some());
-        let token = self.latest_token.clone().unwrap();
-        self.latest_token = None;
-        assert!(self.latest_token.is_none());
-
-        token
-    }
-
     fn reconsume(&mut self) {
         assert!(self.pos > 0);
         self.pos -= 1;
@@ -347,7 +338,7 @@ impl HtmlTokenizeStateMachine {
                     }
                     Some('>') => {
                         self.state = State::Data;
-                        Some(vec![self.take_latest_token()])
+                        Some(vec![self.latest_token.take().unwrap()])
                     }
                     None => Some(vec![HtmlToken::Eof]),
                     Some(c) => {
@@ -363,7 +354,7 @@ impl HtmlTokenizeStateMachine {
                     Some('>') => {
                         self.set_self_closing_flag();
                         self.state = State::Data;
-                        Some(vec![self.take_latest_token()])
+                        Some(vec![self.latest_token.take().unwrap()])
                     }
                     _ => todo!(),
                 }
@@ -472,7 +463,7 @@ impl HtmlTokenizeStateMachine {
                     }
                     Some('>') => {
                         self.state = State::Data;
-                        Some(vec![self.take_latest_token()])
+                        Some(vec![self.latest_token.take().unwrap()])
                     }
                     None => Some(vec![HtmlToken::Eof]),
                     Some(c) => {
@@ -494,7 +485,7 @@ impl HtmlTokenizeStateMachine {
                     }
                     Some('>') => {
                         self.state = State::Data;
-                        Some(vec![self.take_latest_token()])
+                        Some(vec![self.latest_token.take().unwrap()])
                     }
                     None => Some(vec![HtmlToken::Eof]),
                     Some(_) => {
@@ -540,9 +531,9 @@ impl HtmlTokenizeStateMachine {
                 match c {
                     Some('>') => {
                         self.state = State::Data;
-                        Some(vec![self.take_latest_token()])
+                        Some(vec![self.latest_token.take().unwrap()])
                     }
-                    None => Some(vec![self.take_latest_token(), HtmlToken::Eof]),
+                    None => Some(vec![self.latest_token.take().unwrap(), HtmlToken::Eof]),
                     Some(c) => {
                         self.append_doctype_name(c);
                         None
