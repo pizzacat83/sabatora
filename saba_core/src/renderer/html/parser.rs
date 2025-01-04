@@ -1,8 +1,8 @@
 use core::cell::RefCell;
 
-use alloc::{borrow::ToOwned, rc::Rc, string::ToString, vec::Vec};
+use alloc::{rc::Rc, string::ToString, vec::Vec};
 
-use crate::renderer::dom::node::{ElementKind, Node, NodeData, Window};
+use crate::renderer::dom::node::{Node, NodeData, Window};
 
 use super::{
     attribute::Attribute,
@@ -35,6 +35,9 @@ impl HtmlParser {
             if !output.reprocess {
                 maybe_token = self.t.next();
             }
+            if output.stop {
+                break;
+            }
         }
         self.window.clone()
     }
@@ -43,7 +46,7 @@ impl HtmlParser {
         match self.mode {
             InsertionMode::Initial => match token {
                 HtmlToken::Char('\t' | '\n' | '\x0c' | ' ') => StepOutput::default(),
-                HtmlToken::DoctypeTag { name } => {
+                HtmlToken::DoctypeTag { .. } => {
                     self.mode = InsertionMode::BeforeHtml;
                     StepOutput::default()
                 }
@@ -57,11 +60,7 @@ impl HtmlParser {
             },
             InsertionMode::BeforeHtml => {
                 match token {
-                    HtmlToken::StartTag {
-                        tag,
-                        self_closing,
-                        attributes,
-                    } if tag == "html" => {
+                    HtmlToken::StartTag { tag, .. } if tag == "html" => {
                         let element = self.create_element_for_token(token, self.document());
                         Node::append_child(self.document(), Rc::clone(&element));
                         self.stack_of_open_elements.push(Rc::clone(&element));
@@ -77,11 +76,7 @@ impl HtmlParser {
                 }
             }
             InsertionMode::BeforeHead => match token {
-                HtmlToken::StartTag {
-                    tag,
-                    self_closing,
-                    attributes,
-                } if tag == "head" => {
+                HtmlToken::StartTag { tag, .. } if tag == "head" => {
                     self.insert_element_for_token(token);
                     self.mode = InsertionMode::InHead;
                     StepOutput::default()
@@ -97,11 +92,7 @@ impl HtmlParser {
                 _ => todo!(),
             },
             InsertionMode::AfterHead => match token {
-                HtmlToken::StartTag {
-                    tag,
-                    self_closing,
-                    attributes,
-                } if tag == "body" => {
+                HtmlToken::StartTag { tag, .. } if tag == "body" => {
                     self.insert_element_for_token(token);
                     self.mode = InsertionMode::InBody;
                     StepOutput::default()
@@ -162,8 +153,8 @@ impl HtmlParser {
         let attributes: Vec<Attribute>;
         if let HtmlToken::StartTag {
             tag,
-            self_closing,
             attributes: attrs,
+            ..
         } = token
         {
             local_name = tag;
@@ -172,13 +163,13 @@ impl HtmlParser {
             unimplemented!("not a start tag");
         }
         let document = intended_parent.borrow().node_document();
-        let mut element = Node::create_element(document, local_name);
+        let element = Node::create_element(document, local_name);
         element.borrow_mut().extend_element_attributes(attributes);
         element
     }
 
     fn insert_element_for_token(&mut self, token: &HtmlToken) -> Rc<RefCell<Node>> {
-        return self.insert_foreign_element_for_token(token, false);
+        self.insert_foreign_element_for_token(token, false)
     }
 
     fn insert_foreign_element_for_token(
@@ -203,11 +194,11 @@ impl HtmlParser {
     }
 
     fn current_node(&self) -> Option<Rc<RefCell<Node>>> {
-        self.stack_of_open_elements.last().map(|e| Rc::clone(e))
+        self.stack_of_open_elements.last().map(Rc::clone)
     }
 
     fn stack_has_element_in_scope(&self, tag_name: &str) -> bool {
-        return self.stack_has_element_in_specific_scope(tag_name, &DEFAULT_SCOPE);
+        self.stack_has_element_in_specific_scope(tag_name, &DEFAULT_SCOPE)
     }
 
     fn stack_has_element_in_specific_scope(&self, tag_name: &str, default_scope: &[&str]) -> bool {
@@ -281,7 +272,7 @@ pub enum InsertionMode {
 mod tests {
     use alloc::string::ToString;
 
-    use crate::renderer::dom::node::Element;
+    use crate::renderer::dom::node::{Element, ElementKind};
 
     use super::*;
 

@@ -540,7 +540,6 @@ impl HtmlTokenizeStateMachine {
                     }
                 }
             }
-            _ => unimplemented!(),
         }
     }
 }
