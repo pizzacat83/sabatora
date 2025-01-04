@@ -116,6 +116,10 @@ impl HtmlParser {
                 }
             },
             InsertionMode::InBody => match token {
+                HtmlToken::Char(c) => {
+                    self.insert_character(*c);
+                    StepOutput::default()
+                }
                 HtmlToken::EndTag { tag } if tag == "body" => {
                     if self.stack_has_element_in_scope("body") {
                         self.mode = InsertionMode::AfterBody;
@@ -123,10 +127,6 @@ impl HtmlParser {
                     } else {
                         StepOutput::default()
                     }
-                }
-                HtmlToken::Char(c) => {
-                    self.insert_character(*c);
-                    StepOutput::default()
                 }
                 HtmlToken::StartTag { tag, .. } if tag == "p" => {
                     if self.stack_has_element_in_button_scope("p") {
