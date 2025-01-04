@@ -1,10 +1,13 @@
-use core::{cell::RefCell, iter::Step};
+use core::cell::RefCell;
 
-use alloc::{rc::Rc, string::ToString, vec::Vec};
+use alloc::{borrow::ToOwned, rc::Rc, string::ToString, vec::Vec};
 
-use crate::renderer::dom::node::{ElementKind, InsertionLocation, Node, NodeData, Window};
+use crate::renderer::dom::node::{ElementKind, Node, NodeData, Window};
 
-use super::token::{HtmlToken, HtmlTokenizer};
+use super::{
+    attribute::Attribute,
+    token::{HtmlToken, HtmlTokenizer},
+};
 
 #[derive(Debug, Clone)]
 pub struct HtmlParser {
@@ -46,7 +49,10 @@ impl HtmlParser {
                 }
                 _ => {
                     self.mode = InsertionMode::BeforeHtml;
-                    StepOutput { reprocess: true }
+                    StepOutput {
+                        reprocess: true,
+                        ..Default::default()
+                    }
                 }
             },
             InsertionMode::BeforeHtml => {
@@ -57,8 +63,8 @@ impl HtmlParser {
                         attributes,
                     } if tag == "html" => {
                         let element = self.create_element_for_token(token, self.document());
-                        self.document().borrow_mut().append(element);
-                        self.stack_of_open_elements.push(element.clone());
+                        Node::append_child(self.document(), Rc::clone(&element));
+                        self.stack_of_open_elements.push(Rc::clone(&element));
                         self.mode = InsertionMode::BeforeHead;
                         StepOutput::default()
                     }
@@ -76,14 +82,14 @@ impl HtmlParser {
                     self_closing,
                     attributes,
                 } if tag == "head" => {
-                    let element = self.insert_element_for_token(token);
+                    self.insert_element_for_token(token);
                     self.mode = InsertionMode::InHead;
                     StepOutput::default()
                 }
                 _ => todo!(),
             },
             InsertionMode::InHead => match token {
-                &HtmlToken::EndTag { tag } if tag == "head" => {
+                HtmlToken::EndTag { tag } if tag == "head" => {
                     self.stack_of_open_elements.pop();
                     self.mode = InsertionMode::AfterHead;
                     StepOutput::default()
@@ -147,60 +153,84 @@ impl HtmlParser {
         self.window.borrow().document()
     }
 
-    fn create_element_for_token(&self, token: &HtmlToken, intended_parent: Rc<RefCell<Node>>) -> ! {
+    fn create_element_for_token(
+        &self,
+        token: &HtmlToken,
+        intended_parent: Rc<RefCell<Node>>,
+    ) -> Rc<RefCell<Node>> {
         let local_name: &str;
+        let attributes: Vec<Attribute>;
         if let HtmlToken::StartTag {
             tag,
             self_closing,
-            attributes,
+            attributes: attrs,
         } = token
         {
             local_name = tag;
+            attributes = attrs.clone();
         } else {
-            panic!("not a start tag");
+            unimplemented!("not a start tag");
         }
-        let document = intended_parent.node_document();
-        let element = self.create_element(document, local_name);
-        element.attributes = token.attributes().clone();
+        let document = intended_parent.borrow().node_document();
+        let mut element = Node::create_element(document, local_name);
+        element.borrow_mut().extend_element_attributes(attributes);
         element
     }
 
-    fn create_element(&self, document: !, local_name: &str) -> ! {
-        Element::new(ElementKind::from(local_name), document)
-    }
-
-    fn insert_element_for_token(&mut self, token: &HtmlToken) -> ! {
+    fn insert_element_for_token(&mut self, token: &HtmlToken) -> Rc<RefCell<Node>> {
         return self.insert_foreign_element_for_token(token, false);
     }
 
     fn insert_foreign_element_for_token(
-        &self,
+        &mut self,
         token: &HtmlToken,
         only_add_to_element_stack: bool,
-    ) -> ! {
+    ) -> Rc<RefCell<Node>> {
         let adjusted_inserted_location =
             self.calc_appropriate_insertion_location_for_inserting_node();
         let element =
             self.create_element_for_token(token, adjusted_inserted_location.intended_parent());
         if !only_add_to_element_stack {
-            adjusted_inserted_location.insert(element);
+            adjusted_inserted_location.insert_element(Rc::clone(&element));
         }
-        self.stack_of_open_elements.push(element);
+        self.stack_of_open_elements.push(Rc::clone(&element));
         element
     }
 
     fn calc_appropriate_insertion_location_for_inserting_node(&self) -> InsertionLocation {
-        let target = self.current_node();
+        let target = self.current_node().unwrap();
         InsertionLocation::InsideNodeAfterLastChild(target)
     }
 
-    fn current_node(&self) -> ! {
-        self.stack_of_open_elements.last().unwrap().clone()
+    fn current_node(&self) -> Option<Rc<RefCell<Node>>> {
+        self.stack_of_open_elements.last().map(|e| Rc::clone(e))
+    }
+
+    fn stack_has_element_in_scope(&self, tag_name: &str) -> bool {
+        return self.stack_has_element_in_specific_scope(tag_name, &DEFAULT_SCOPE);
+    }
+
+    fn stack_has_element_in_specific_scope(&self, tag_name: &str, default_scope: &[&str]) -> bool {
+        for node in self.stack_of_open_elements.iter().rev() {
+            if let NodeData::Element(element) = node.borrow().data() {
+                if element.tag_name() == tag_name {
+                    return true;
+                }
+                if default_scope.contains(&element.tag_name().as_str()) {
+                    return false;
+                }
+            }
+        }
+        unreachable!()
     }
 }
 
+const DEFAULT_SCOPE: [&str; 9] = [
+    "applet", "caption", "html", "table", "td", "th", "marquee", "object", "template",
+];
+
 #[derive(Debug, Clone)]
-pub enum InsertionLocation {
+enum InsertionLocation {
     InsideNodeAfterLastChild(Rc<RefCell<Node>>),
 }
 
@@ -208,6 +238,14 @@ impl InsertionLocation {
     fn intended_parent(&self) -> Rc<RefCell<Node>> {
         match self {
             InsertionLocation::InsideNodeAfterLastChild(parent) => parent.clone(),
+        }
+    }
+
+    fn insert_element(self, element: Rc<RefCell<Node>>) {
+        match self {
+            InsertionLocation::InsideNodeAfterLastChild(parent) => {
+                Node::append_child(parent, element);
+            }
         }
     }
 }
@@ -256,12 +294,30 @@ mod tests {
         assert_eq!(&NodeData::Document, document.borrow().data());
 
         let document_children: Vec<_> = document.borrow().children().collect();
-        assert_eq!(2, document_children.len());
+        assert_eq!(1, document_children.len());
         let html = document_children[0].clone();
         if let NodeData::Element(element) = html.borrow().data() {
             assert_eq!(&Element::new(ElementKind::Html), element);
         } else {
             panic!("not an element");
-        }
+        };
+
+        let html_children: Vec<_> = html.borrow().children().collect();
+        assert_eq!(2, html_children.len());
+        let head = html_children[0].clone();
+        if let NodeData::Element(element) = head.borrow().data() {
+            assert_eq!(&Element::new(ElementKind::Head), element);
+        } else {
+            panic!("not an element");
+        };
+        assert!(head.borrow().children().next().is_none());
+
+        let body = html_children[1].clone();
+        if let NodeData::Element(element) = body.borrow().data() {
+            assert_eq!(&Element::new(ElementKind::Body), element);
+        } else {
+            panic!("not an element");
+        };
+        assert!(body.borrow().children().next().is_none());
     }
 }
