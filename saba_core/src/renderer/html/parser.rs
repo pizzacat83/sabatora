@@ -281,8 +281,11 @@ mod tests {
         let html = "<!doctype html><html><head></head><body></body></html>".to_string();
         let t = HtmlTokenizer::new(html);
         let window = HtmlParser::new(t).construct_tree();
+
         let document = window.borrow().document();
         assert_eq!(&NodeData::Document, document.borrow().data());
+
+        Node::assert_tree_structure(document.clone());
 
         let document_children: Vec<_> = document.borrow().children().collect();
         assert_eq!(1, document_children.len());

@@ -201,3 +201,44 @@ impl Iterator for NodeChildrenIterator {
         }
     }
 }
+
+impl Node {
+    pub fn assert_tree_structure(node: Rc<RefCell<Node>>) {
+        Self::assert_tree_structure_rec(node, None);
+    }
+
+    fn assert_tree_structure_rec(node: Rc<RefCell<Node>>, parent: Option<Rc<RefCell<Node>>>) {
+        if let Some(ref parent) = parent {
+            assert!(Weak::ptr_eq(&parent.borrow().window, &node.borrow().window));
+            assert!(Weak::ptr_eq(&node.borrow().parent, &Rc::downgrade(parent)));
+
+            if let Some(ref next_sibling) = node.borrow().next_sibling {
+                assert!(Weak::ptr_eq(
+                    &next_sibling.borrow().previous_sibling,
+                    &Rc::downgrade(&node)
+                ));
+            } else {
+                assert!(Weak::ptr_eq(
+                    &parent.borrow().last_child,
+                    &Rc::downgrade(&node)
+                ));
+            }
+        } else {
+            assert!(node.borrow().parent.upgrade().is_none());
+            assert!(node.borrow().previous_sibling.upgrade().is_none());
+            assert!(node.borrow().next_sibling.is_none());
+        }
+
+        if let Some(first_child) = node.borrow().first_child.as_ref() {
+            assert!(&first_child.borrow().previous_sibling.upgrade().is_none());
+        }
+
+        if let Some(last_child) = node.borrow().last_child.upgrade() {
+            assert!(&last_child.borrow().next_sibling.is_none());
+        }
+
+        for child in node.borrow().children() {
+            Self::assert_tree_structure_rec(child, Some(Rc::clone(&node)));
+        }
+    }
+}
