@@ -317,11 +317,7 @@ impl HtmlParser {
     }
 
     fn pop_stack_of_open_elements_up_to_including_tag(&mut self, tag: &str) {
-        loop {
-            let open_element = match self.stack_of_open_elements.pop() {
-                Some(n) => n,
-                None => break,
-            };
+        while let Some(open_element) = self.stack_of_open_elements.pop() {
             if let NodeData::Element(element) = open_element.borrow().data() {
                 if element.tag_name().to_string() == tag {
                     break;
@@ -505,6 +501,7 @@ mod tests {
             assert_eq!(&NodeData::Document, document.borrow().data());
 
             Node::assert_tree_structure(document.clone());
+            eprintln!("tree:\n{}", Node::build_ascii_tree(Rc::clone(&document)));
 
             let document_children: Vec<_> = document.borrow().children().collect();
             assert_eq!(1, document_children.len());
