@@ -3,10 +3,11 @@ use core::cell::RefCell;
 use alloc::{
     rc::Rc,
     string::{String, ToString},
+    vec,
     vec::Vec,
 };
 
-use crate::renderer::dom::node::{Node, NodeData, Window};
+use crate::renderer::dom::node::{ElementKind, Node, NodeData, Window};
 
 use super::{
     attribute::Attribute,
@@ -127,6 +128,42 @@ impl HtmlParser {
                     self.insert_character(*c);
                     StepOutput::default()
                 }
+                HtmlToken::StartTag { tag, .. } if tag == "p" => {
+                    if self.stack_has_element_in_button_scope("p") {
+                        self.close_p_element();
+                    }
+                    self.insert_element_for_token(token);
+                    StepOutput::default()
+                }
+                HtmlToken::EndTag { tag } if tag == "p" => {
+                    if self.stack_has_element_in_button_scope("p") {
+                        self.insert_element_for_token(&HtmlToken::StartTag {
+                            tag: "p".to_string(),
+                            self_closing: false,
+                            attributes: Vec::new(),
+                        });
+                    }
+                    self.close_p_element();
+                    StepOutput::default()
+                }
+                HtmlToken::StartTag { tag, .. } if tag == "a" => {
+                    self.insert_element_for_token(token);
+                    StepOutput::default()
+                }
+                HtmlToken::EndTag { tag } => {
+                    for node in self.stack_of_open_elements.iter().rev().map(Rc::clone) {
+                        if let NodeData::Element(element) = node.borrow().data() {
+                            if &element.tag_name().to_string() == tag {
+                                self.generate_implied_end_tags_except_for(tag);
+                                self.pop_stack_of_open_elements_up_to_including_node(Rc::clone(
+                                    &node,
+                                ));
+                                break;
+                            }
+                        }
+                    }
+                    StepOutput::default()
+                }
                 _ => todo!(),
             },
             InsertionMode::AfterBody => match token {
@@ -209,13 +246,19 @@ impl HtmlParser {
         self.stack_has_element_in_specific_scope(tag_name, &DEFAULT_SCOPE)
     }
 
-    fn stack_has_element_in_specific_scope(&self, tag_name: &str, default_scope: &[&str]) -> bool {
+    fn stack_has_element_in_button_scope(&self, tag_name: &str) -> bool {
+        let mut scope = vec!["button"];
+        scope.extend_from_slice(&DEFAULT_SCOPE);
+        self.stack_has_element_in_specific_scope(tag_name, &scope)
+    }
+
+    fn stack_has_element_in_specific_scope(&self, tag_name: &str, scope: &[&str]) -> bool {
         for node in self.stack_of_open_elements.iter().rev() {
             if let NodeData::Element(element) = node.borrow().data() {
-                if element.tag_name() == tag_name {
+                if element.tag_name().to_string() == tag_name {
                     return true;
                 }
-                if default_scope.contains(&element.tag_name().as_str()) {
+                if scope.contains(&element.tag_name().to_string().as_str()) {
                     return false;
                 }
             }
@@ -239,7 +282,56 @@ impl HtmlParser {
             Node::create_text_node(adjusted_inserted_location.document(), String::from(c));
         adjusted_inserted_location.insert(text_node);
     }
+
+    fn close_p_element(&mut self) {
+        self.generate_implied_end_tags_except_for("p");
+        self.pop_stack_of_open_elements_up_to_including_tag("p");
+    }
+
+    fn generate_implied_end_tags_except_for(&mut self, tag: &str) {
+        loop {
+            if let Some(node) = self.stack_of_open_elements.last() {
+                if let NodeData::Element(element) = Rc::clone(node).borrow().data() {
+                    if ELEMENT_NEEDS_IMPLIED_END_TAG.contains(&element.tag_name())
+                        && element.tag_name().to_string() != tag
+                    {
+                        self.stack_of_open_elements.pop();
+                        continue;
+                    }
+                }
+            }
+            break;
+        }
+    }
+
+    fn pop_stack_of_open_elements_up_to_including_node(&mut self, node: Rc<RefCell<Node>>) {
+        loop {
+            let open_element = match self.stack_of_open_elements.pop() {
+                Some(n) => n,
+                None => break,
+            };
+            if Rc::ptr_eq(&open_element, &node) {
+                break;
+            }
+        }
+    }
+
+    fn pop_stack_of_open_elements_up_to_including_tag(&mut self, tag: &str) {
+        loop {
+            let open_element = match self.stack_of_open_elements.pop() {
+                Some(n) => n,
+                None => break,
+            };
+            if let NodeData::Element(element) = open_element.borrow().data() {
+                if element.tag_name().to_string() == tag {
+                    break;
+                }
+            };
+        }
+    }
 }
+
+const ELEMENT_NEEDS_IMPLIED_END_TAG: [ElementKind; 1] = [ElementKind::P];
 
 const DEFAULT_SCOPE: [&str; 9] = [
     "applet", "caption", "html", "table", "td", "th", "marquee", "object", "template",
@@ -398,5 +490,82 @@ mod tests {
             panic!("not a text");
         };
         assert!(text.borrow().children().next().is_none());
+    }
+
+    #[test]
+    fn test_multiple_nodes() {
+        {
+            let html =
+                "<!doctype html><html><head></head><body><p><a foo=bar>text</a></p></body></html>"
+                    .to_string();
+            let t = HtmlTokenizer::new(html);
+            let window = HtmlParser::new(t).construct_tree();
+
+            let document = window.borrow().document();
+            assert_eq!(&NodeData::Document, document.borrow().data());
+
+            Node::assert_tree_structure(document.clone());
+
+            let document_children: Vec<_> = document.borrow().children().collect();
+            assert_eq!(1, document_children.len());
+            let html = document_children[0].clone();
+            if let NodeData::Element(element) = html.borrow().data() {
+                assert_eq!(&Element::new(ElementKind::Html), element);
+            } else {
+                panic!("not an element");
+            };
+
+            let html_children: Vec<_> = html.borrow().children().collect();
+            assert_eq!(2, html_children.len());
+            let head = html_children[0].clone();
+            if let NodeData::Element(element) = head.borrow().data() {
+                assert_eq!(&Element::new(ElementKind::Head), element);
+            } else {
+                panic!("not an element");
+            };
+            assert!(head.borrow().children().next().is_none());
+
+            let body = html_children[1].clone();
+            if let NodeData::Element(element) = body.borrow().data() {
+                assert_eq!(&Element::new(ElementKind::Body), element);
+            } else {
+                panic!("not an element");
+            };
+
+            let body_children: Vec<_> = body.borrow().children().collect();
+            assert_eq!(1, body_children.len());
+
+            let p = body_children[0].clone();
+            if let NodeData::Element(element) = p.borrow().data() {
+                assert_eq!(&Element::new(ElementKind::P), element);
+            } else {
+                panic!("not an element");
+            };
+
+            let p_children: Vec<_> = p.borrow().children().collect();
+            assert_eq!(1, p_children.len());
+
+            let a = p_children[0].clone();
+            let a_expected = Element::new_with_attributes(
+                ElementKind::A,
+                vec![Attribute::new("foo".to_string(), "bar".to_string())],
+            );
+
+            if let NodeData::Element(element) = a.borrow().data() {
+                assert_eq!(&a_expected, element);
+            } else {
+                panic!("not an element");
+            };
+
+            let a_children: Vec<_> = a.borrow().children().collect();
+            assert_eq!(1, a_children.len());
+
+            let text = a_children[0].clone();
+            if let NodeData::Text(text) = text.borrow().data() {
+                assert_eq!("text", text);
+            } else {
+                panic!("not a text");
+            };
+        }
     }
 }

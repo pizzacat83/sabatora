@@ -47,8 +47,12 @@ impl Element {
         }
     }
 
-    pub fn tag_name(&self) -> String {
-        self.kind.to_string()
+    pub fn new_with_attributes(kind: ElementKind, attributes: Vec<Attribute>) -> Self {
+        Self { kind, attributes }
+    }
+
+    pub fn tag_name(&self) -> &ElementKind {
+        &self.kind
     }
 }
 
@@ -58,6 +62,10 @@ pub enum ElementKind {
     Head,
     Style,
     Body,
+    P,
+    H1,
+    H2,
+    A,
 }
 
 impl TryFrom<&str> for ElementKind {
@@ -69,6 +77,10 @@ impl TryFrom<&str> for ElementKind {
             "head" => Ok(Self::Head),
             "style" => Ok(Self::Style),
             "body" => Ok(Self::Body),
+            "p" => Ok(Self::P),
+            "h1" => Ok(Self::H1),
+            "h2" => Ok(Self::H2),
+            "a" => Ok(Self::A),
             _ => Err(format!("unknown element kind: {}", value)),
         }
     }
@@ -81,6 +93,10 @@ impl Display for ElementKind {
             Self::Head => write!(f, "head"),
             Self::Style => write!(f, "style"),
             Self::Body => write!(f, "body"),
+            Self::P => write!(f, "p"),
+            Self::H1 => write!(f, "h1"),
+            Self::H2 => write!(f, "h2"),
+            Self::A => write!(f, "a"),
         }
     }
 }
