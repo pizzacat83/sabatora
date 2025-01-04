@@ -1,6 +1,10 @@
 use core::cell::RefCell;
 
-use alloc::{rc::Rc, string::ToString, vec::Vec};
+use alloc::{
+    rc::Rc,
+    string::{String, ToString},
+    vec::Vec,
+};
 
 use crate::renderer::dom::node::{Node, NodeData, Window};
 
@@ -119,6 +123,10 @@ impl HtmlParser {
                         StepOutput::default()
                     }
                 }
+                HtmlToken::Char(c) => {
+                    self.insert_character(*c);
+                    StepOutput::default()
+                }
                 _ => todo!(),
             },
             InsertionMode::AfterBody => match token {
@@ -182,7 +190,7 @@ impl HtmlParser {
         let element =
             self.create_element_for_token(token, adjusted_inserted_location.intended_parent());
         if !only_add_to_element_stack {
-            adjusted_inserted_location.insert_element(Rc::clone(&element));
+            adjusted_inserted_location.insert(Rc::clone(&element));
         }
         self.stack_of_open_elements.push(Rc::clone(&element));
         element
@@ -214,6 +222,23 @@ impl HtmlParser {
         }
         unreachable!()
     }
+
+    fn insert_character(&self, c: char) {
+        let adjusted_inserted_location =
+            self.calc_appropriate_insertion_location_for_inserting_node();
+        if adjusted_inserted_location.intended_parent().borrow().data() == &NodeData::Document {
+            return;
+        }
+        if let Some(before_node) = adjusted_inserted_location.before_element() {
+            if matches!(before_node.borrow().data(), NodeData::Text(_)) {
+                before_node.borrow_mut().append_text_character(c);
+                return;
+            }
+        }
+        let text_node =
+            Node::create_text_node(adjusted_inserted_location.document(), String::from(c));
+        adjusted_inserted_location.insert(text_node);
+    }
 }
 
 const DEFAULT_SCOPE: [&str; 9] = [
@@ -232,10 +257,22 @@ impl InsertionLocation {
         }
     }
 
-    fn insert_element(self, element: Rc<RefCell<Node>>) {
+    fn document(&self) -> Rc<RefCell<Node>> {
+        match self {
+            InsertionLocation::InsideNodeAfterLastChild(parent) => parent.borrow().node_document(),
+        }
+    }
+
+    fn before_element(&self) -> Option<Rc<RefCell<Node>>> {
+        match self {
+            InsertionLocation::InsideNodeAfterLastChild(parent) => parent.borrow().last_child(),
+        }
+    }
+
+    fn insert(self, node: Rc<RefCell<Node>>) {
         match self {
             InsertionLocation::InsideNodeAfterLastChild(parent) => {
-                Node::append_child(parent, element);
+                Node::append_child(parent, node);
             }
         }
     }
@@ -313,5 +350,53 @@ mod tests {
             panic!("not an element");
         };
         assert!(body.borrow().children().next().is_none());
+    }
+
+    #[test]
+    fn test_text() {
+        let html = "<!doctype html><html><head></head><body>text</body></html>".to_string();
+        let t = HtmlTokenizer::new(html);
+        let window = HtmlParser::new(t).construct_tree();
+
+        let document = window.borrow().document();
+        assert_eq!(&NodeData::Document, document.borrow().data());
+
+        Node::assert_tree_structure(document.clone());
+
+        let document_children: Vec<_> = document.borrow().children().collect();
+        assert_eq!(1, document_children.len());
+        let html = document_children[0].clone();
+        if let NodeData::Element(element) = html.borrow().data() {
+            assert_eq!(&Element::new(ElementKind::Html), element);
+        } else {
+            panic!("not an element");
+        };
+
+        let html_children: Vec<_> = html.borrow().children().collect();
+        assert_eq!(2, html_children.len());
+        let head = html_children[0].clone();
+        if let NodeData::Element(element) = head.borrow().data() {
+            assert_eq!(&Element::new(ElementKind::Head), element);
+        } else {
+            panic!("not an element");
+        };
+        assert!(head.borrow().children().next().is_none());
+
+        let body = html_children[1].clone();
+        if let NodeData::Element(element) = body.borrow().data() {
+            assert_eq!(&Element::new(ElementKind::Body), element);
+        } else {
+            panic!("not an element");
+        };
+
+        let body_children: Vec<_> = body.borrow().children().collect();
+        assert_eq!(1, body_children.len());
+        let text = body_children[0].clone();
+        if let NodeData::Text(text) = text.borrow().data() {
+            assert_eq!("text", text);
+        } else {
+            panic!("not a text");
+        };
+        assert!(text.borrow().children().next().is_none());
     }
 }

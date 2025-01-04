@@ -120,6 +120,10 @@ impl Node {
             .unwrap()
     }
 
+    pub fn last_child(&self) -> Option<Rc<RefCell<Node>>> {
+        self.last_child.upgrade()
+    }
+
     pub fn create_element(document: Rc<RefCell<Node>>, local_name: &str) -> Rc<RefCell<Node>> {
         let element = Node {
             data: NodeData::Element(Element {
@@ -136,12 +140,35 @@ impl Node {
         Rc::new(RefCell::new(element))
     }
 
+    pub fn create_text_node(document: Rc<RefCell<Node>>, c: String) -> Rc<RefCell<Node>> {
+        let text_node = Rc::new(RefCell::new(Node {
+            data: NodeData::Text(c),
+            window: document.borrow().window.clone(),
+            parent: Weak::new(),
+            first_child: None,
+            last_child: Weak::new(),
+            previous_sibling: Weak::new(),
+            next_sibling: None,
+        }));
+
+        text_node
+    }
+
     pub fn extend_element_attributes(&mut self, attributes: Vec<Attribute>) {
         match &mut self.data {
             NodeData::Element(element) => {
                 element.attributes.extend(attributes);
             }
             _ => panic!("not an element"),
+        }
+    }
+
+    pub fn append_text_character(&mut self, c: char) {
+        match &mut self.data {
+            NodeData::Text(text) => {
+                text.push(c);
+            }
+            _ => panic!("not a text node"),
         }
     }
 
