@@ -136,7 +136,7 @@ impl HtmlParser {
                     StepOutput::default()
                 }
                 HtmlToken::EndTag { tag } if tag == "p" => {
-                    if self.stack_has_element_in_button_scope("p") {
+                    if !self.stack_has_element_in_button_scope("p") {
                         self.insert_element_for_token(&HtmlToken::StartTag {
                             tag: "p".to_string(),
                             self_closing: false,
