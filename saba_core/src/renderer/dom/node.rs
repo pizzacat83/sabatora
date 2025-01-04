@@ -285,3 +285,34 @@ impl Node {
         }
     }
 }
+
+impl Node {
+    pub fn build_ascii_tree(node: Rc<RefCell<Node>>) -> String {
+        let mut buf = String::new();
+        Self::build_ascii_tree_rec(node, &mut buf, 0);
+
+        buf
+    }
+
+    fn build_ascii_tree_rec(node: Rc<RefCell<Node>>, writer: &mut String, depth: usize) {
+        writer.push_str(&"   ".repeat(depth));
+        writer.push_str("|- ");
+        let node = node.borrow();
+        match &node.data {
+            NodeData::Document => {
+                writer.push_str("Document\n");
+            }
+            NodeData::Element(element) => {
+                // TODO: show attributes
+                writer.push_str(&format!("Element: {}\n", element.kind));
+            }
+            NodeData::Text(text) => {
+                writer.push_str(&format!("Text: {}\n", text));
+            }
+        }
+
+        for child in node.children() {
+            Self::build_ascii_tree_rec(child, writer, depth + 1);
+        }
+    }
+}
