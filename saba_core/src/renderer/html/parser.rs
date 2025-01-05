@@ -345,7 +345,7 @@ impl HtmlParser {
         loop {
             if let Some(node) = self.stack_of_open_elements.last() {
                 if let NodeData::Element(element) = Rc::clone(node).borrow().data() {
-                    if ELEMENT_NEEDS_IMPLIED_END_TAG.contains(&element.tag_name())
+                    if ELEMENT_NEEDS_IMPLIED_END_TAG.contains(element.tag_name())
                         && !tags.contains(&element.tag_name().to_string().as_str())
                     {
                         self.stack_of_open_elements.pop();
@@ -361,11 +361,7 @@ impl HtmlParser {
     where
         P: FnMut(Rc<RefCell<Node>>) -> bool,
     {
-        loop {
-            let open_element = match self.stack_of_open_elements.pop() {
-                Some(n) => n,
-                None => break,
-            };
+        while let Some(open_element) = self.stack_of_open_elements.pop() {
             if terminating_condition(open_element) {
                 break;
             }
@@ -373,25 +369,18 @@ impl HtmlParser {
     }
 
     fn pop_stack_of_open_elements_up_to_including_node(&mut self, node: Rc<RefCell<Node>>) {
-        loop {
-            let open_element = match self.stack_of_open_elements.pop() {
-                Some(n) => n,
-                None => break,
-            };
-            if Rc::ptr_eq(&open_element, &node) {
-                break;
-            }
-        }
+        self.pop_stack_of_open_elements_up_to_including(|open_element| {
+            Rc::ptr_eq(&open_element, &node)
+        });
     }
 
     fn pop_stack_of_open_elements_up_to_including_tag(&mut self, tag: &str) {
-        while let Some(open_element) = self.stack_of_open_elements.pop() {
-            if let NodeData::Element(element) = open_element.borrow().data() {
-                if element.tag_name().to_string() == tag {
-                    break;
-                }
-            };
-        }
+        self.pop_stack_of_open_elements_up_to_including(|open_element| {
+            match open_element.borrow().data() {
+                NodeData::Element(element) => element.tag_name().to_string() == tag,
+                _ => false,
+            }
+        })
     }
 }
 
