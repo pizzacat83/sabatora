@@ -7,7 +7,7 @@ use alloc::{
     vec::Vec,
 };
 
-use crate::renderer::dom::node::{ElementKind, Node, NodeData, Window};
+use crate::renderer::dom::node::{Element, ElementKind, Node, NodeData, Window};
 
 use super::{
     attribute::Attribute,
@@ -121,7 +121,7 @@ impl HtmlParser {
                     StepOutput::default()
                 }
                 HtmlToken::EndTag { tag } if tag == "body" => {
-                    if self.stack_has_element_in_scope("body") {
+                    if self.stack_has_element_in_scope(|e| e.tag_name() == &ElementKind::Body) {
                         self.mode = InsertionMode::AfterBody;
                         StepOutput::default()
                     } else {
@@ -129,14 +129,15 @@ impl HtmlParser {
                     }
                 }
                 HtmlToken::StartTag { tag, .. } if tag == "p" => {
-                    if self.stack_has_element_in_button_scope("p") {
+                    if self.stack_has_element_in_button_scope(|e| e.tag_name() == &ElementKind::P) {
                         self.close_p_element();
                     }
                     self.insert_element_for_token(token);
                     StepOutput::default()
                 }
                 HtmlToken::EndTag { tag } if tag == "p" => {
-                    if !self.stack_has_element_in_button_scope("p") {
+                    if !self.stack_has_element_in_button_scope(|e| e.tag_name() == &ElementKind::P)
+                    {
                         self.insert_element_for_token(&HtmlToken::StartTag {
                             tag: "p".to_string(),
                             self_closing: false,
@@ -146,15 +147,54 @@ impl HtmlParser {
                     self.close_p_element();
                     StepOutput::default()
                 }
+                HtmlToken::StartTag { tag, .. } if tag == "h1" || tag == "h2" => {
+                    if self.stack_has_element_in_button_scope(|e| e.tag_name() == &ElementKind::P) {
+                        self.close_p_element();
+                    }
+                    let has_open_heading = self
+                        .stack_of_open_elements
+                        .last()
+                        .map(|node| {
+                            if let NodeData::Element(element) = node.borrow().data() {
+                                [ElementKind::H1, ElementKind::H2].contains(element.tag_name())
+                            } else {
+                                false
+                            }
+                        })
+                        .unwrap_or_default();
+                    if has_open_heading {
+                        self.stack_of_open_elements.pop();
+                    }
+                    self.insert_element_for_token(token);
+                    StepOutput::default()
+                }
                 HtmlToken::StartTag { tag, .. } if tag == "a" => {
                     self.insert_element_for_token(token);
                     StepOutput::default()
+                }
+                HtmlToken::EndTag { tag } if tag == "h1" || tag == "h2" => {
+                    if !self.stack_has_element_in_scope(|e| {
+                        [ElementKind::H1, ElementKind::H2].contains(e.tag_name())
+                    }) {
+                        StepOutput::default()
+                    } else {
+                        self.generate_implied_end_tags();
+                        self.pop_stack_of_open_elements_up_to_including(|node| {
+                            match node.borrow().data() {
+                                NodeData::Element(element) => {
+                                    [ElementKind::H1, ElementKind::H2].contains(element.tag_name())
+                                }
+                                _ => false,
+                            }
+                        });
+                        StepOutput::default()
+                    }
                 }
                 HtmlToken::EndTag { tag } => {
                     for node in self.stack_of_open_elements.iter().rev().map(Rc::clone) {
                         if let NodeData::Element(element) = node.borrow().data() {
                             if &element.tag_name().to_string() == tag {
-                                self.generate_implied_end_tags_except_for(tag);
+                                self.generate_implied_end_tags_except_for(&[tag]);
                                 self.pop_stack_of_open_elements_up_to_including_node(Rc::clone(
                                     &node,
                                 ));
@@ -242,20 +282,29 @@ impl HtmlParser {
         self.stack_of_open_elements.last().map(Rc::clone)
     }
 
-    fn stack_has_element_in_scope(&self, tag_name: &str) -> bool {
-        self.stack_has_element_in_specific_scope(tag_name, &DEFAULT_SCOPE)
+    fn stack_has_element_in_scope<P>(&self, predicate: P) -> bool
+    where
+        P: FnMut(&Element) -> bool,
+    {
+        self.stack_has_element_in_specific_scope(predicate, &DEFAULT_SCOPE)
     }
 
-    fn stack_has_element_in_button_scope(&self, tag_name: &str) -> bool {
+    fn stack_has_element_in_button_scope<P>(&self, predicate: P) -> bool
+    where
+        P: FnMut(&Element) -> bool,
+    {
         let mut scope = vec!["button"];
         scope.extend_from_slice(&DEFAULT_SCOPE);
-        self.stack_has_element_in_specific_scope(tag_name, &scope)
+        self.stack_has_element_in_specific_scope(predicate, &scope)
     }
 
-    fn stack_has_element_in_specific_scope(&self, tag_name: &str, scope: &[&str]) -> bool {
+    fn stack_has_element_in_specific_scope<P>(&self, mut predicate: P, scope: &[&str]) -> bool
+    where
+        P: FnMut(&Element) -> bool,
+    {
         for node in self.stack_of_open_elements.iter().rev() {
             if let NodeData::Element(element) = node.borrow().data() {
-                if element.tag_name().to_string() == tag_name {
+                if predicate(element) {
                     return true;
                 }
                 if scope.contains(&element.tag_name().to_string().as_str()) {
@@ -284,16 +333,20 @@ impl HtmlParser {
     }
 
     fn close_p_element(&mut self) {
-        self.generate_implied_end_tags_except_for("p");
+        self.generate_implied_end_tags_except_for(&["p"]);
         self.pop_stack_of_open_elements_up_to_including_tag("p");
     }
 
-    fn generate_implied_end_tags_except_for(&mut self, tag: &str) {
+    fn generate_implied_end_tags(&mut self) {
+        self.generate_implied_end_tags_except_for(&[]);
+    }
+
+    fn generate_implied_end_tags_except_for(&mut self, tags: &[&str]) {
         loop {
             if let Some(node) = self.stack_of_open_elements.last() {
                 if let NodeData::Element(element) = Rc::clone(node).borrow().data() {
                     if ELEMENT_NEEDS_IMPLIED_END_TAG.contains(&element.tag_name())
-                        && element.tag_name().to_string() != tag
+                        && !tags.contains(&element.tag_name().to_string().as_str())
                     {
                         self.stack_of_open_elements.pop();
                         continue;
@@ -301,6 +354,21 @@ impl HtmlParser {
                 }
             }
             break;
+        }
+    }
+
+    fn pop_stack_of_open_elements_up_to_including<P>(&mut self, mut terminating_condition: P)
+    where
+        P: FnMut(Rc<RefCell<Node>>) -> bool,
+    {
+        loop {
+            let open_element = match self.stack_of_open_elements.pop() {
+                Some(n) => n,
+                None => break,
+            };
+            if terminating_condition(open_element) {
+                break;
+            }
         }
     }
 
