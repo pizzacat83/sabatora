@@ -32,6 +32,7 @@ struct HtmlTokenizeStateMachine {
     state: State,
     pos: usize,
     latest_token: Option<HtmlToken>,
+    latest_start_tag_name: Option<String>,
     input: Vec<char>,
     buf: String,
 }
@@ -57,6 +58,10 @@ impl HtmlTokenizer {
         }
         None
     }
+
+    pub(crate) fn set_state(&mut self, state: State) {
+        self.state_machine.state = state;
+    }
 }
 impl HtmlTokenizeStateMachine {
     pub fn new(html: String) -> Self {
@@ -64,6 +69,7 @@ impl HtmlTokenizeStateMachine {
             state: State::Data,
             pos: 0,
             latest_token: None,
+            latest_start_tag_name: None,
             input: html.chars().collect(),
             buf: String::new(),
         }
@@ -193,6 +199,15 @@ impl HtmlTokenizeStateMachine {
             panic!("append_doctype_name: latest_token is not DoctypeTag");
         }
     }
+
+    fn is_appropriate_end_tag(&self) -> bool {
+        if let (Some(HtmlToken::EndTag { tag }), Some(start_tag_name)) =
+            (&self.latest_token, &self.latest_start_tag_name)
+        {
+            return tag == start_tag_name;
+        }
+        false
+    }
 }
 
 /// <https://html.spec.whatwg.org/multipage/parsing.html#parse-state>
@@ -228,17 +243,18 @@ pub enum State {
     Doctype,
     BeforeDoctypeName,
     DoctypeName,
-    // TODO
-    // /// <https://html.spec.whatwg.org/multipage/parsing.html#script-data-state>
-    // ScriptData,
-    // /// <https://html.spec.whatwg.org/multipage/parsing.html#script-data-less-than-state>
-    // ScriptDataLessThanSign,
-    // /// <https://html.spec.whatwg.org/multipage/parsing.html#script-data-end-tag-open-state>
-    // ScriptDataEndTagOpen,
-    // /// <https://html.spec.whatwg.org/multipage/parsing.html#script-data-end-tag-name>
-    // ScriptDataEndTagName,
-    // /// <https://html.spec.whatwg.org/multipage/parsing.html#temporary-buffer>
-    // TemporaryBuffer,
+    Rcdata,
+    RcdataLessThanSign,
+    RcdataEndTagOpen,
+    RcdataEndTagName,
+    /// <https://html.spec.whatwg.org/multipage/parsing.html#script-data-state>
+    ScriptData,
+    /// <https://html.spec.whatwg.org/multipage/parsing.html#script-data-less-than-state>
+    ScriptDataLessThanSign,
+    /// <https://html.spec.whatwg.org/multipage/parsing.html#script-data-end-tag-open-state>
+    ScriptDataEndTagOpen,
+    /// <https://html.spec.whatwg.org/multipage/parsing.html#script-data-end-tag-name>
+    ScriptDataEndTagName,
 }
 
 impl Iterator for HtmlTokenizer {
@@ -251,6 +267,9 @@ impl Iterator for HtmlTokenizer {
             if let Some(token) = self.take_remaining_token() {
                 if token == HtmlToken::Eof {
                     self.eof_observed = true;
+                }
+                if let HtmlToken::StartTag { tag, .. } = &token {
+                    self.state_machine.latest_start_tag_name = Some(tag.clone());
                 }
                 return Some(token);
             }
@@ -538,6 +557,136 @@ impl HtmlTokenizeStateMachine {
                         self.append_doctype_name(c);
                         None
                     }
+                }
+            }
+            State::Rcdata => {
+                let c = self.consume_next_input();
+                match c {
+                    Some('&') => unimplemented!(),
+                    Some('<') => {
+                        self.state = State::RcdataLessThanSign;
+                        None
+                    }
+                    None => Some(vec![HtmlToken::Eof]),
+                    Some(c) => Some(vec![HtmlToken::Char(c)]),
+                }
+            }
+            State::RcdataLessThanSign => {
+                let c = self.consume_next_input();
+                match c {
+                    Some('/') => {
+                        self.buf.clear();
+                        self.state = State::RcdataEndTagOpen;
+                        None
+                    }
+                    _ => {
+                        self.reconsume();
+                        self.state = State::Rcdata;
+                        Some(vec![HtmlToken::Char('<')])
+                    }
+                }
+            }
+            State::RcdataEndTagOpen => {
+                let c = self.consume_next_input();
+                match c {
+                    Some(c) if c.is_ascii_alphabetic() => {
+                        self.create_tag(false);
+                        self.reconsume();
+                        self.state = State::RcdataEndTagName;
+                        None
+                    }
+                    _ => {
+                        self.reconsume();
+                        self.state = State::Rcdata;
+                        Some(vec![HtmlToken::Char('<')])
+                    }
+                }
+            }
+            State::RcdataEndTagName => {
+                let c = self.consume_next_input();
+                match c {
+                    Some('>') => {
+                        if self.is_appropriate_end_tag() {
+                            self.state = State::Data;
+                            Some(vec![self.latest_token.take().unwrap()])
+                        } else {
+                            unimplemented!()
+                        }
+                    }
+                    Some(c) if c.is_ascii_alphabetic() && c.is_lowercase() => {
+                        self.append_tag_name(c);
+                        self.buf.push(c);
+                        None
+                    }
+                    _ => unimplemented!(),
+                }
+            }
+            State::ScriptData => {
+                let c = self.consume_next_input();
+                match c {
+                    Some('<') => {
+                        self.state = State::ScriptDataLessThanSign;
+                        None
+                    }
+                    Some('\0') => {
+                        self.append_tag_name('\u{FFFD}');
+                        None
+                    }
+                    None => Some(vec![HtmlToken::Eof]),
+                    Some(c) => Some(vec![HtmlToken::Char(c)]),
+                }
+            }
+            State::ScriptDataLessThanSign => {
+                let c = self.consume_next_input();
+                match c {
+                    Some('/') => {
+                        self.buf.clear();
+                        self.state = State::ScriptDataEndTagOpen;
+                        None
+                    }
+                    Some('!') => unimplemented!(),
+                    _ => {
+                        self.reconsume();
+                        self.state = State::ScriptData;
+                        Some(vec![HtmlToken::Char('<')])
+                    }
+                }
+            }
+            State::ScriptDataEndTagOpen => {
+                let c = self.consume_next_input();
+                match c {
+                    Some(c) if c.is_ascii_alphabetic() => {
+                        self.create_tag(false);
+                        self.reconsume();
+                        self.state = State::ScriptDataEndTagName;
+                        None
+                    }
+                    _ => {
+                        self.reconsume();
+                        self.state = State::ScriptData;
+                        Some(vec![HtmlToken::Char('<'), HtmlToken::Char('/')])
+                    }
+                }
+            }
+            State::ScriptDataEndTagName => {
+                let c = self.consume_next_input();
+                match c {
+                    Some('\t' | '\n' | '\x0c' | ' ') => unimplemented!(),
+                    Some('/') => unimplemented!(),
+                    Some('>') => {
+                        if self.is_appropriate_end_tag() {
+                            self.state = State::Data;
+                            Some(vec![self.latest_token.take().unwrap()])
+                        } else {
+                            unimplemented!()
+                        }
+                    }
+                    Some(c) if c.is_ascii_alphabetic() && c.is_lowercase() => {
+                        self.append_tag_name(c);
+                        self.buf.push(c);
+                        None
+                    }
+                    _ => unimplemented!(),
                 }
             }
         }

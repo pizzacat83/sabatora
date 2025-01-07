@@ -11,7 +11,7 @@ use crate::renderer::dom::node::{Element, ElementKind, Node, NodeData, Window};
 
 use super::{
     attribute::Attribute,
-    token::{HtmlToken, HtmlTokenizer},
+    token::{self, HtmlToken, HtmlTokenizer},
 };
 
 #[derive(Debug, Clone)]
@@ -37,6 +37,9 @@ impl HtmlParser {
         let mut maybe_token = self.t.next();
         while let Some(token) = &maybe_token {
             let output = self.step(token);
+            if let Some(state) = output.set_tokenizer_state {
+                self.t.set_state(state);
+            }
             if !output.reprocess {
                 maybe_token = self.t.next();
             }
@@ -81,6 +84,7 @@ impl HtmlParser {
                 }
             }
             InsertionMode::BeforeHead => match token {
+                HtmlToken::Char('\t' | '\n' | '\x0c' | '\r' | ' ') => StepOutput::default(),
                 HtmlToken::StartTag { tag, .. } if tag == "head" => {
                     self.insert_element_for_token(token);
                     self.mode = InsertionMode::InHead;
@@ -89,6 +93,7 @@ impl HtmlParser {
                 _ => todo!(),
             },
             InsertionMode::InHead => match token {
+                HtmlToken::Char('\t' | '\n' | '\x0c' | '\r' | ' ') => StepOutput::default(),
                 HtmlToken::EndTag { tag } if tag == "head" => {
                     self.stack_of_open_elements.pop();
                     self.mode = InsertionMode::AfterHead;
@@ -97,6 +102,10 @@ impl HtmlParser {
                 _ => todo!(),
             },
             InsertionMode::AfterHead => match token {
+                HtmlToken::Char(c) if ['\t', '\n', '\x0c', '\r', ' '].contains(c) => {
+                    self.insert_character(*c);
+                    StepOutput::default()
+                }
                 HtmlToken::StartTag { tag, .. } if tag == "body" => {
                     self.insert_element_for_token(token);
                     self.mode = InsertionMode::InBody;
@@ -116,6 +125,7 @@ impl HtmlParser {
                 }
             },
             InsertionMode::InBody => match token {
+                HtmlToken::Char('\t' | '\n' | '\x0c' | '\r' | ' ') => StepOutput::default(),
                 HtmlToken::Char(c) => {
                     self.insert_character(*c);
                     StepOutput::default()
@@ -190,6 +200,33 @@ impl HtmlParser {
                         StepOutput::default()
                     }
                 }
+                HtmlToken::StartTag { tag, .. } if tag == "textarea" => {
+                    self.insert_element_for_token(token);
+                    // TODO: ignore next LF
+                    self.original_insertion_mode = self.mode.clone();
+                    self.mode = InsertionMode::Text;
+                    StepOutput {
+                        set_tokenizer_state: Some(token::State::Rcdata),
+                        ..Default::default()
+                    }
+                }
+                HtmlToken::StartTag { tag, .. } if tag == "script" => {
+                    let adjusted_insertion_location =
+                        self.calc_appropriate_insertion_location_for_inserting_node();
+                    let element = self.create_element_for_token(
+                        token,
+                        adjusted_insertion_location.intended_parent(),
+                    );
+                    adjusted_insertion_location.insert(Rc::clone(&element));
+                    self.stack_of_open_elements.push(Rc::clone(&element));
+                    self.original_insertion_mode = self.mode.clone();
+                    self.mode = InsertionMode::Text;
+                    StepOutput {
+                        set_tokenizer_state: Some(token::State::ScriptData),
+                        ..Default::default()
+                    }
+                }
+
                 HtmlToken::EndTag { tag } => {
                     for node in self.stack_of_open_elements.iter().rev().map(Rc::clone) {
                         if let NodeData::Element(element) = node.borrow().data() {
@@ -207,6 +244,7 @@ impl HtmlParser {
                 _ => todo!(),
             },
             InsertionMode::AfterBody => match token {
+                HtmlToken::Char('\t' | '\n' | '\x0c' | '\r' | ' ') => StepOutput::default(),
                 HtmlToken::EndTag { tag } if tag == "html" => {
                     self.mode = InsertionMode::AfterAfterBody;
                     StepOutput::default()
@@ -214,11 +252,34 @@ impl HtmlParser {
                 _ => todo!(),
             },
             InsertionMode::AfterAfterBody => match token {
+                HtmlToken::Char('\t' | '\n' | '\x0c' | '\r' | ' ') => StepOutput::default(),
                 HtmlToken::Eof => StepOutput {
                     stop: true,
                     ..Default::default()
                 },
                 _ => todo!(),
+            },
+            InsertionMode::Text => match token {
+                HtmlToken::Char(c) => {
+                    self.insert_character(*c);
+                    StepOutput::default()
+                }
+                HtmlToken::EndTag { tag } if tag == "script" => {
+                    self.stack_of_open_elements.pop().unwrap();
+                    self.mode = self.original_insertion_mode.clone();
+                    StepOutput::default()
+                }
+                HtmlToken::EndTag { .. } => {
+                    self.stack_of_open_elements.pop();
+                    self.mode = self.original_insertion_mode.clone();
+                    // TODO: handle reentrance
+                    // TODO: prepare the script element
+                    StepOutput {
+                        set_tokenizer_state: Some(token::State::Data),
+                        ..Default::default()
+                    }
+                }
+                _ => unreachable!(),
             },
 
             _ => todo!(),
@@ -426,6 +487,7 @@ impl InsertionLocation {
 struct StepOutput {
     reprocess: bool,
     stop: bool,
+    set_tokenizer_state: Option<token::State>,
 }
 
 impl Default for StepOutput {
@@ -433,6 +495,7 @@ impl Default for StepOutput {
         Self {
             reprocess: false,
             stop: false,
+            set_tokenizer_state: None,
         }
     }
 }
@@ -621,5 +684,29 @@ mod tests {
                 panic!("not a text");
             };
         }
+    }
+
+    /// https://challenge-hamayan.quiz.flatt.training/
+    #[test]
+    fn test_flatt_security_xss_challenge_hamayan() {
+        let html = r#"
+<html>
+<head>
+</head>
+<body>
+    <p id="</textarea><script>alert(origin);</script>"></p>
+    <textarea name="message"><p id="</textarea><script>alert(origin);</script>"></p></textarea>
+</body>
+</html>
+"#
+        .to_string();
+        let t = HtmlTokenizer::new(html);
+        let window = HtmlParser::new(t).construct_tree();
+
+        let document = window.borrow().document();
+        assert_eq!(&NodeData::Document, document.borrow().data());
+
+        Node::assert_tree_structure(document.clone());
+        eprintln!("tree:\n{}", Node::build_ascii_tree(Rc::clone(&document)));
     }
 }

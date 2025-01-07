@@ -66,6 +66,8 @@ pub enum ElementKind {
     H1,
     H2,
     A,
+    Textarea,
+    Script,
 }
 
 impl TryFrom<&str> for ElementKind {
@@ -81,6 +83,8 @@ impl TryFrom<&str> for ElementKind {
             "h1" => Ok(Self::H1),
             "h2" => Ok(Self::H2),
             "a" => Ok(Self::A),
+            "textarea" => Ok(Self::Textarea),
+            "script" => Ok(Self::Script),
             _ => Err(format!("unknown element kind: {}", value)),
         }
     }
@@ -97,6 +101,8 @@ impl Display for ElementKind {
             Self::H1 => write!(f, "h1"),
             Self::H2 => write!(f, "h2"),
             Self::A => write!(f, "a"),
+            Self::Textarea => write!(f, "textarea"),
+            Self::Script => write!(f, "script"),
         }
     }
 }
