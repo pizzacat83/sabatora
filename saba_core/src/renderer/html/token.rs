@@ -286,7 +286,7 @@ impl HtmlTokenizeStateMachine {
                 let c = self.consume_next_input();
                 match c {
                     Some('&') => {
-                        todo!()
+                        unimplemented!()
                     }
                     Some('<') => {
                         self.state = State::TagOpen;
@@ -314,7 +314,7 @@ impl HtmlTokenizeStateMachine {
                         None
                     }
                     Some('?') => {
-                        todo!()
+                        unimplemented!()
                     }
                     Some(_) => {
                         self.reconsume();
@@ -341,7 +341,7 @@ impl HtmlTokenizeStateMachine {
                         HtmlToken::Char('/'),
                         HtmlToken::Eof,
                     ]),
-                    Some(_) => todo!(),
+                    Some(_) => unimplemented!(),
                 }
             }
             State::TagName => {
@@ -375,7 +375,7 @@ impl HtmlTokenizeStateMachine {
                         self.state = State::Data;
                         Some(vec![self.latest_token.take().unwrap()])
                     }
-                    _ => todo!(),
+                    _ => unimplemented!(),
                 }
             }
             State::BeforeAttributeName => {
@@ -423,7 +423,7 @@ impl HtmlTokenizeStateMachine {
                         None
                     }
                     None => Some(vec![HtmlToken::Eof]),
-                    Some(_) => todo!(),
+                    Some(_) => unimplemented!(),
                 }
             }
             State::BeforeAttributeValue => {
@@ -519,7 +519,7 @@ impl HtmlTokenizeStateMachine {
                     self.state = State::Doctype;
                     None
                 } else {
-                    todo!()
+                    unimplemented!()
                 }
             }
             State::Doctype => {
@@ -529,7 +529,7 @@ impl HtmlTokenizeStateMachine {
                         self.state = State::BeforeDoctypeName;
                         None
                     }
-                    Some(_) => todo!(),
+                    Some(_) => unimplemented!(),
                     None => Some(vec![HtmlToken::DoctypeTag { name: None }, HtmlToken::Eof]),
                 }
             }

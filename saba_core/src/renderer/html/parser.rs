@@ -79,7 +79,7 @@ impl HtmlParser {
                     _ => {
                         // TODO
                         self.mode = InsertionMode::BeforeHead;
-                        todo!()
+                        unimplemented!()
                     }
                 }
             }
@@ -90,7 +90,7 @@ impl HtmlParser {
                     self.mode = InsertionMode::InHead;
                     StepOutput::default()
                 }
-                _ => todo!(),
+                _ => unimplemented!(),
             },
             InsertionMode::InHead => match token {
                 HtmlToken::Char('\t' | '\n' | '\x0c' | '\r' | ' ') => StepOutput::default(),
@@ -99,7 +99,7 @@ impl HtmlParser {
                     self.mode = InsertionMode::AfterHead;
                     StepOutput::default()
                 }
-                _ => todo!(),
+                _ => unimplemented!(),
             },
             InsertionMode::AfterHead => match token {
                 HtmlToken::Char(c) if ['\t', '\n', '\x0c', '\r', ' '].contains(c) => {
@@ -241,7 +241,7 @@ impl HtmlParser {
                     }
                     StepOutput::default()
                 }
-                _ => todo!(),
+                _ => unimplemented!(),
             },
             InsertionMode::AfterBody => match token {
                 HtmlToken::Char('\t' | '\n' | '\x0c' | '\r' | ' ') => StepOutput::default(),
@@ -249,7 +249,7 @@ impl HtmlParser {
                     self.mode = InsertionMode::AfterAfterBody;
                     StepOutput::default()
                 }
-                _ => todo!(),
+                _ => unimplemented!(),
             },
             InsertionMode::AfterAfterBody => match token {
                 HtmlToken::Char('\t' | '\n' | '\x0c' | '\r' | ' ') => StepOutput::default(),
@@ -257,7 +257,7 @@ impl HtmlParser {
                     stop: true,
                     ..Default::default()
                 },
-                _ => todo!(),
+                _ => unimplemented!(),
             },
             InsertionMode::Text => match token {
                 HtmlToken::Char(c) => {
@@ -282,7 +282,7 @@ impl HtmlParser {
                 _ => unreachable!(),
             },
 
-            _ => todo!(),
+            _ => unimplemented!(),
         }
     }
 
