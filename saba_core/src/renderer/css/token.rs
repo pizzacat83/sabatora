@@ -146,4 +146,45 @@ mod tests {
         }
         assert_eq!(None, t.next());
     }
+
+    #[test]
+    fn test_multiple_rules() {
+        let style = r#"p { content: "Hey"; } h1 { font-size: 40; color: blue; }"#.to_string();
+        let mut t = CssTokenizer::new(style);
+        let expected = [
+            CssToken::Ident("p".to_string()),
+            CssToken::Whitespace,
+            CssToken::OpenCurly,
+            CssToken::Whitespace,
+            CssToken::Ident("content".to_string()),
+            CssToken::Colon,
+            CssToken::Whitespace,
+            CssToken::String("Hey".to_string()),
+            CssToken::SemiColon,
+            CssToken::Whitespace,
+            CssToken::CloseCurly,
+            CssToken::Whitespace,
+            CssToken::Ident("h1".to_string()),
+            CssToken::Whitespace,
+            CssToken::OpenCurly,
+            CssToken::Whitespace,
+            CssToken::Ident("font-size".to_string()),
+            CssToken::Colon,
+            CssToken::Whitespace,
+            CssToken::Number(40.0),
+            CssToken::SemiColon,
+            CssToken::Whitespace,
+            CssToken::Ident("color".to_string()),
+            CssToken::Colon,
+            CssToken::Whitespace,
+            CssToken::Ident("blue".to_string()),
+            CssToken::SemiColon,
+            CssToken::Whitespace,
+            CssToken::CloseCurly,
+        ];
+        for e in expected {
+            assert_eq!(Some(e.clone()), t.next());
+        }
+        assert_eq!(None, t.next());
+    }
 }
