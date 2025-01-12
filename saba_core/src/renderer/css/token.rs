@@ -49,10 +49,15 @@ impl CssTokenizer {
                 self.consume_whitespaces();
                 Some(CssToken::Whitespace)
             }
+            Some('"') => Some(self.consume_string_token()),
             Some(':') => Some(CssToken::Colon),
             Some(';') => Some(CssToken::SemiColon),
             Some('{') => Some(CssToken::OpenCurly),
             Some('}') => Some(CssToken::CloseCurly),
+            Some(c) if c.is_ascii_digit() => {
+                self.reconsume_input();
+                Some(self.consume_numeric_token())
+            }
             Some(c) if is_ident_start_code_point(c) => {
                 self.reconsume_input();
                 Some(self.consume_ident_like_token())
@@ -91,7 +96,7 @@ impl CssTokenizer {
         let mut result = String::new();
         loop {
             match self.consume_input() {
-                Some(c) if is_ident_start_code_point(c) => {
+                Some(c) if is_ident_code_point(c) => {
                     result.push(c);
                 }
                 // TODO: handle escape
@@ -114,10 +119,62 @@ impl CssTokenizer {
             }
         }
     }
+
+    fn consume_string_token(&mut self) -> CssToken {
+        let ending_code_point = self.current_input();
+        let mut string = String::new();
+        loop {
+            match self.consume_input() {
+                Some(c) if c == ending_code_point => {
+                    return CssToken::String(string);
+                }
+                None => {
+                    return CssToken::String(string);
+                }
+                // TODO: handle escape
+                Some(c) => {
+                    string.push(c);
+                }
+            }
+        }
+    }
+
+    fn current_input(&self) -> char {
+        assert!(self.pos > 0);
+        self.input[self.pos - 1]
+    }
+
+    fn consume_numeric_token(&mut self) -> CssToken {
+        let number = self.consume_number();
+        // TODO: handle dimension
+        CssToken::Number(number)
+    }
+
+    fn consume_number(&mut self) -> f64 {
+        let mut repr = String::new();
+        loop {
+            match self.consume_input() {
+                Some(c) if c.is_ascii_digit() => {
+                    repr.push(c);
+                }
+
+                _ => {
+                    self.reconsume_input();
+                    break;
+                }
+            };
+        }
+        // TODO: handle fraction
+        repr.parse().unwrap()
+    }
 }
 
 fn is_ident_start_code_point(c: char) -> bool {
     c.is_ascii_alphabetic() || !c.is_ascii() || c == '_'
+}
+
+fn is_ident_code_point(c: char) -> bool {
+    is_ident_start_code_point(c) || c.is_ascii_digit() || c == '-'
 }
 
 #[cfg(test)]
