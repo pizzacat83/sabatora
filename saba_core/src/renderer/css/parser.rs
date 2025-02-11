@@ -27,10 +27,11 @@ mod css_parser {
         }
     }
 
+    /// <https://www.w3.org/TR/css-syntax-3/#parse-a-style-blocks-contents>
     fn parse_style_block_contents(block: &SimpleBlock) -> cssom::CssStyleDeclaration {
         // TODO
         cssom::CssStyleDeclaration {
-            declarations: vec![],
+            declarations: DeclarationsParser::parse(block),
         }
     }
 
@@ -54,6 +55,105 @@ mod css_parser {
                 cssom::CompoundSelector(selectors),
             )],
         }
+    }
+
+    struct DeclarationsParser {
+        values: Vec<ComponentValue>,
+        pos: usize,
+    }
+
+    impl DeclarationsParser {
+        pub fn parse(block: &SimpleBlock) -> Vec<cssom::CssDeclaration> {
+            let mut parser = Self {
+                values: block.value.clone(),
+                pos: 0,
+            };
+            let mut declarations = Vec::new();
+            while let Some(d) = parser.consume_declaration() {
+                declarations.push(d);
+            }
+            declarations
+        }
+
+        fn consume_next_value(&mut self) -> Option<ComponentValue> {
+            if self.pos < self.values.len() {
+                let v = &self.values[self.pos];
+                self.pos += 1;
+                Some(v.clone())
+            } else {
+                None
+            }
+        }
+
+        fn peek_next_value(&mut self) -> Option<&ComponentValue> {
+            if self.pos < self.values.len() {
+                Some(&self.values[self.pos])
+            } else {
+                None
+            }
+        }
+
+        /// <https://www.w3.org/TR/css-syntax-3/#consume-a-declaration>
+        fn consume_declaration(&mut self) -> Option<cssom::CssDeclaration> {
+            let property_name = match self.consume_next_value() {
+                Some(ComponentValue::PreservedToken(CssToken::Ident(id))) => id,
+                // Note: This algorithm assumes that the next input token has already been checked to be an <ident-token>.
+                _ => unreachable!(),
+            };
+
+            let mut declaration = cssom::CssDeclaration {
+                property_name,
+                value: Vec::new(),
+            };
+
+            while matches!(
+                self.peek_next_value(),
+                Some(&ComponentValue::PreservedToken(CssToken::Whitespace)),
+            ) {
+                self.consume_next_value();
+            }
+
+            assert_eq!(
+                self.consume_next_value(),
+                Some(ComponentValue::PreservedToken(CssToken::Colon)),
+            );
+
+            while matches!(
+                self.peek_next_value(),
+                Some(&ComponentValue::PreservedToken(CssToken::Whitespace)),
+            ) {
+                self.consume_next_value();
+            }
+
+            let mut declaration_value = Vec::new();
+
+            while let Some(t) = self.consume_next_value() {
+                declaration_value.push(t);
+            }
+
+            // TODO: handle !important
+
+            while let Some(ComponentValue::PreservedToken(CssToken::Whitespace)) =
+                declaration_value.last()
+            {
+                declaration_value.pop();
+            }
+
+            declaration.value = parse_value(declaration_value);
+
+            Some(declaration)
+        }
+    }
+
+    fn parse_value(
+        declaration_value: Vec<ComponentValue>,
+    ) -> Vec<super::super::value::ComponentValue> {
+        if declaration_value.len() == 1 {
+            if let ComponentValue::PreservedToken(CssToken::Ident(id)) = &declaration_value[0] {
+                return vec![super::super::value::ComponentValue::Keyword(id.into())];
+            }
+        }
+        unimplemented!("not supported value: {declaration_value:#?}")
     }
 }
 
@@ -214,7 +314,10 @@ mod tests {
                         ]))],
                     },
                     declarations: CssStyleDeclaration {
-                        declarations: vec![], // TODO
+                        declarations: vec![CssDeclaration {
+                            property_name: "color".into(),
+                            value: vec![super::super::value::ComponentValue::Keyword("red".into())],
+                        }],
                     },
                 }],
             }

@@ -25,8 +25,8 @@ pub struct CssStyleDeclaration {
 /// <https://www.w3.org/TR/cssom-1/#css-declaration>
 #[derive(Debug, Clone, PartialEq)]
 pub struct CssDeclaration {
-    property_name: String,
-    value: Vec<ComponentValue>,
+    pub property_name: String,
+    pub value: Vec<ComponentValue>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
