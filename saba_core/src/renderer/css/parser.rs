@@ -4,6 +4,8 @@ use alloc::string::String;
 use alloc::{vec, vec::Vec};
 
 mod css_parser {
+    use crate::renderer::css::cssom::CssDeclaration;
+
     use super::super::cssom;
     use super::super::token::{CssToken, CssTokenizer};
     use super::*;
@@ -29,7 +31,6 @@ mod css_parser {
 
     /// <https://www.w3.org/TR/css-syntax-3/#parse-a-style-blocks-contents>
     fn parse_style_block_contents(block: &SimpleBlock) -> cssom::CssStyleDeclaration {
-        // TODO
         cssom::CssStyleDeclaration {
             declarations: DeclarationsParser::parse(block),
         }
@@ -69,9 +70,48 @@ mod css_parser {
                 pos: 0,
             };
             let mut declarations = Vec::new();
-            while let Some(d) = parser.consume_declaration() {
-                declarations.push(d);
+
+            loop {
+                match parser.consume_next_value() {
+                    None => {
+                        break;
+                    }
+                    Some(t) => {
+                        let ComponentValue::PreservedToken(t) = t;
+                        use CssToken::*;
+                        match t {
+                            Whitespace | SemiColon => {}
+                            Ident(_) => {
+                                let mut list = vec![t.clone()];
+                                loop {
+                                    match parser.peek_next_value() {
+                                        None => {
+                                            break;
+                                        }
+                                        Some(t) => {
+                                            let ComponentValue::PreservedToken(t) = t;
+                                            match t {
+                                                SemiColon => {
+                                                    break;
+                                                }
+                                                _ => {
+                                                    list.push(t.clone());
+                                                }
+                                            }
+                                        }
+                                    }
+                                    parser.consume_next_value();
+                                }
+                                if let Some(d) = DeclarationParser::parse(list) {
+                                    declarations.push(d);
+                                }
+                            }
+                            _ => unimplemented!(),
+                        }
+                    }
+                }
             }
+
             declarations
         }
 
@@ -92,11 +132,41 @@ mod css_parser {
                 None
             }
         }
+    }
+
+    struct DeclarationParser {
+        tokens: Vec<CssToken>,
+        pos: usize,
+    }
+
+    impl DeclarationParser {
+        pub fn parse(tokens: Vec<CssToken>) -> Option<CssDeclaration> {
+            let mut parser = DeclarationParser { tokens, pos: 0 };
+            parser.consume_declaration()
+        }
+
+        fn consume_next_token(&mut self) -> Option<CssToken> {
+            if self.pos < self.tokens.len() {
+                let v = &self.tokens[self.pos];
+                self.pos += 1;
+                Some(v.clone())
+            } else {
+                None
+            }
+        }
+
+        fn peek_next_token(&mut self) -> Option<&CssToken> {
+            if self.pos < self.tokens.len() {
+                Some(&self.tokens[self.pos])
+            } else {
+                None
+            }
+        }
 
         /// <https://www.w3.org/TR/css-syntax-3/#consume-a-declaration>
         fn consume_declaration(&mut self) -> Option<cssom::CssDeclaration> {
-            let property_name = match self.consume_next_value() {
-                Some(ComponentValue::PreservedToken(CssToken::Ident(id))) => id,
+            let property_name = match self.consume_next_token() {
+                Some(CssToken::Ident(id)) => id,
                 // Note: This algorithm assumes that the next input token has already been checked to be an <ident-token>.
                 _ => unreachable!(),
             };
@@ -106,36 +176,25 @@ mod css_parser {
                 value: Vec::new(),
             };
 
-            while matches!(
-                self.peek_next_value(),
-                Some(&ComponentValue::PreservedToken(CssToken::Whitespace)),
-            ) {
-                self.consume_next_value();
+            while matches!(self.peek_next_token(), Some(&CssToken::Whitespace),) {
+                self.consume_next_token();
             }
 
-            assert_eq!(
-                self.consume_next_value(),
-                Some(ComponentValue::PreservedToken(CssToken::Colon)),
-            );
+            assert_eq!(self.consume_next_token(), Some(CssToken::Colon),);
 
-            while matches!(
-                self.peek_next_value(),
-                Some(&ComponentValue::PreservedToken(CssToken::Whitespace)),
-            ) {
-                self.consume_next_value();
+            while matches!(self.peek_next_token(), Some(&CssToken::Whitespace),) {
+                self.consume_next_token();
             }
 
             let mut declaration_value = Vec::new();
 
-            while let Some(t) = self.consume_next_value() {
+            while let Some(t) = self.consume_next_token() {
                 declaration_value.push(t);
             }
 
             // TODO: handle !important
 
-            while let Some(ComponentValue::PreservedToken(CssToken::Whitespace)) =
-                declaration_value.last()
-            {
+            while let Some(CssToken::Whitespace) = declaration_value.last() {
                 declaration_value.pop();
             }
 
@@ -145,11 +204,9 @@ mod css_parser {
         }
     }
 
-    fn parse_value(
-        declaration_value: Vec<ComponentValue>,
-    ) -> Vec<super::super::value::ComponentValue> {
+    fn parse_value(declaration_value: Vec<CssToken>) -> Vec<super::super::value::ComponentValue> {
         if declaration_value.len() == 1 {
-            if let ComponentValue::PreservedToken(CssToken::Ident(id)) = &declaration_value[0] {
+            if let CssToken::Ident(id) = &declaration_value[0] {
                 return vec![super::super::value::ComponentValue::Keyword(id.into())];
             }
         }
