@@ -54,6 +54,15 @@ impl CssTokenizer {
             Some(';') => Some(CssToken::SemiColon),
             Some('{') => Some(CssToken::OpenCurly),
             Some('}') => Some(CssToken::CloseCurly),
+            Some('.') => {
+                // TODO: If the input stream starts with a number, reconsume the current input code point, consume a numeric token, and return it.
+                Some(CssToken::Delim('.'))
+            }
+            Some('#') => {
+                // TODO: Otherwise, return a <delim-token> with its value set to the current input code point.
+                let ident = self.consume_ident_sequence();
+                Some(CssToken::Hash(ident))
+            }
             Some(c) if c.is_ascii_digit() => {
                 self.reconsume_input();
                 Some(self.consume_numeric_token())

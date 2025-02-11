@@ -1,6 +1,63 @@
+use super::cssom;
 use super::token::{CssToken, CssTokenizer};
 use alloc::string::String;
-use alloc::vec::Vec;
+use alloc::{vec, vec::Vec};
+
+mod css_parser {
+    use super::super::cssom;
+    use super::super::token::{CssToken, CssTokenizer};
+    use super::*;
+    use alloc::string::String;
+    use alloc::{vec, vec::Vec};
+
+    /// <https://www.w3.org/TR/css-syntax-3/#parse-a-css-stylesheet>
+    pub fn parse_css_stylesheet(source: String) -> cssom::CssStyleSheet {
+        let tokenizer = CssTokenizer::new(source);
+        let stylesheet = StyleSheetParser::new(tokenizer).parse_stylesheet();
+
+        let css_rules = stylesheet.rules.iter().map(parse_style_rule).collect();
+
+        cssom::CssStyleSheet { css_rules }
+    }
+
+    fn parse_style_rule(rule: &QualifiedRule) -> cssom::CssStyleRule {
+        cssom::CssStyleRule {
+            selector: parse_selector_list(&rule.prelude),
+            declarations: parse_style_block_contents(&rule.block),
+        }
+    }
+
+    fn parse_style_block_contents(block: &SimpleBlock) -> cssom::CssStyleDeclaration {
+        // TODO
+        cssom::CssStyleDeclaration {
+            declarations: vec![],
+        }
+    }
+
+    /// <https://www.w3.org/TR/selectors-4/#typedef-selector-list>
+    fn parse_selector_list(prelude: &[ComponentValue]) -> cssom::SelectorList {
+        let mut selectors = Vec::new();
+
+        for v in prelude {
+            let ComponentValue::PreservedToken(v) = v;
+            use CssToken::*;
+            match v {
+                Hash(id) => selectors.push(cssom::SimpleSelector::IdSelector(id.clone())),
+                Ident(ty) => selectors.push(cssom::SimpleSelector::TypeSelector(ty.clone())),
+                Delim('.') => todo!(".class not implemented yet"),
+                _ => {}
+            }
+        }
+
+        cssom::SelectorList {
+            selectors: vec![cssom::ComplexSelector::CompoundSelector(
+                cssom::CompoundSelector(selectors),
+            )],
+        }
+    }
+}
+
+pub use css_parser::parse_css_stylesheet;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct StyleSheetParser {
@@ -9,7 +66,7 @@ pub struct StyleSheetParser {
 }
 
 impl StyleSheetParser {
-    fn new(t: CssTokenizer) -> Self {
+    pub fn new(t: CssTokenizer) -> Self {
         Self {
             t,
             reconsumed: None,
@@ -25,7 +82,7 @@ impl StyleSheetParser {
         self.reconsumed = Some(t)
     }
 
-    fn parse_stylesheet(&mut self) -> StyleSheet {
+    pub fn parse_stylesheet(&mut self) -> StyleSheet {
         let rules = self.consume_list_of_rules();
         StyleSheet { rules }
     }
@@ -118,7 +175,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_one_rule() {
+    fn test_stylesheet_one_rule() {
         let style = "p{color:red;}".to_string();
         let t = CssTokenizer::new(style);
         let parsed = StyleSheetParser::new(t).parse_stylesheet();
@@ -137,6 +194,30 @@ mod tests {
                     ],
                 },
             }],
+        };
+
+        assert_eq!(expected, parsed);
+    }
+
+    #[test]
+    fn test_css_one_rule() {
+        let style = "p{color:red;}".to_string();
+        let parsed = parse_css_stylesheet(style);
+
+        let expected = {
+            use cssom::*;
+            CssStyleSheet {
+                css_rules: vec![CssStyleRule {
+                    selector: SelectorList {
+                        selectors: vec![ComplexSelector::CompoundSelector(CompoundSelector(vec![
+                            SimpleSelector::TypeSelector("p".into()),
+                        ]))],
+                    },
+                    declarations: CssStyleDeclaration {
+                        declarations: vec![], // TODO
+                    },
+                }],
+            }
         };
 
         assert_eq!(expected, parsed);

@@ -6,20 +6,20 @@ use super::value::ComponentValue;
 /// <https://www.w3.org/TR/cssom-1/#cssstylesheet>
 #[derive(Debug, Clone, PartialEq)]
 pub struct CssStyleSheet {
-    css_rules: Vec<CssRule>,
+    pub css_rules: Vec<CssRule>,
 }
 
 // for simplicity
 type CssRule = CssStyleRule;
 #[derive(Debug, Clone, PartialEq)]
 pub struct CssStyleRule {
-    selector: SelectorList,
-    declarations: CssStyleDeclaration,
+    pub selector: SelectorList,
+    pub declarations: CssStyleDeclaration,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct CssStyleDeclaration {
-    declarations: Vec<CssDeclaration>,
+    pub declarations: Vec<CssDeclaration>,
 }
 
 /// <https://www.w3.org/TR/cssom-1/#css-declaration>
@@ -31,7 +31,7 @@ pub struct CssDeclaration {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct SelectorList {
-    selectors: Vec<ComplexSelector>,
+    pub selectors: Vec<ComplexSelector>,
 }
 
 /// <https://www.w3.org/TR/selectors-4/#complex>
@@ -44,7 +44,7 @@ pub enum ComplexSelector {
 /// <https://www.w3.org/TR/selectors-4/#compound>
 /// A compound selector is a sequence of simple selectors that are not separated by a combinator
 #[derive(Debug, Clone, PartialEq)]
-pub struct CompoundSelector(Vec<SimpleSelector>);
+pub struct CompoundSelector(pub Vec<SimpleSelector>);
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SimpleSelector {
