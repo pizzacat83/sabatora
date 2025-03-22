@@ -31,9 +31,14 @@ pub struct CssStyleDeclaration {
 pub struct CssDeclaration {
     pub property_name: String,
 
-    // <https://www.w3.org/TR/cssom-1/#css-declaration-value>
-    // The value of the declaration represented as a list of component values.
-    // TODO: is the type correct?
+    /// <https://www.w3.org/TR/cssom-1/#css-declaration-value>
+    ///
+    /// I'm not confident about this type. The spec says:
+    /// > The value of the declaration represented as a list of component values.
+    /// However, the spec doesn't clearly refer to the definition of "component value".
+    ///
+    /// Now I think this should be crate::renderer::css::parser::ComponentValue.
+    /// TODO: reconsider after implementing the styling engine
     pub value: Vec<ComponentValue>,
 }
 
