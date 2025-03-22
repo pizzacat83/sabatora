@@ -22,6 +22,7 @@ mod css_parser {
         cssom::CssStyleSheet { css_rules }
     }
 
+    /// <https://www.w3.org/TR/css-syntax-3/#parse-a-stylesheet>
     fn parse_style_rule(rule: &QualifiedRule) -> cssom::CssStyleRule {
         cssom::CssStyleRule {
             selector: parse_selector_list(&rule.prelude),
@@ -64,6 +65,7 @@ mod css_parser {
     }
 
     impl DeclarationsParser {
+        /// <https://www.w3.org/TR/css-syntax-3/#consume-a-list-of-declarations>
         pub fn parse(block: &SimpleBlock) -> Vec<cssom::CssDeclaration> {
             let mut parser = Self {
                 values: block.value.clone(),
@@ -234,16 +236,19 @@ impl StyleSheetParser {
         self.reconsumed.take().or_else(|| self.t.next())
     }
 
+    /// <https://www.w3.org/TR/css-syntax-3/#reconsume-the-current-input-token>
     fn reconsume(&mut self, t: CssToken) {
         assert!(self.reconsumed.is_none());
         self.reconsumed = Some(t)
     }
 
+    /// <https://www.w3.org/TR/css-syntax-3/#parse-a-stylesheet>
     pub fn parse_stylesheet(&mut self) -> StyleSheet {
         let rules = self.consume_list_of_rules();
         StyleSheet { rules }
     }
 
+    /// <https://www.w3.org/TR/css-syntax-3/#consume-a-list-of-rules>
     fn consume_list_of_rules(&mut self) -> Vec<QualifiedRule> {
         let mut rules = Vec::new();
         loop {
@@ -261,6 +266,7 @@ impl StyleSheetParser {
         rules
     }
 
+    /// <https://www.w3.org/TR/css-syntax-3/#consume-a-qualified-rule>
     fn consume_qualified_rule(&mut self) -> QualifiedRule {
         let mut prelude = Vec::new();
         loop {
@@ -282,6 +288,7 @@ impl StyleSheetParser {
         }
     }
 
+    /// <https://www.w3.org/TR/css-syntax-3/#consume-a-simple-block>
     fn consume_simple_block(&mut self, ending_token: CssToken) -> SimpleBlock {
         let mut block = SimpleBlock { value: Vec::new() };
         loop {
@@ -298,6 +305,7 @@ impl StyleSheetParser {
         }
     }
 
+    /// <https://www.w3.org/TR/css-syntax-3/#consume-a-component-value>
     fn consume_component_value(&mut self) -> ComponentValue {
         match self.consume_next_input_token() {
             None => unimplemented!(),
@@ -306,22 +314,27 @@ impl StyleSheetParser {
     }
 }
 
+/// <https://www.w3.org/TR/css-syntax-3/#stylesheet-diagram>
 #[derive(Debug, Clone, PartialEq)]
 pub struct StyleSheet {
     rules: Vec<QualifiedRule>,
 }
 
+/// <https://www.w3.org/TR/css-syntax-3/#qualified-rule>
 #[derive(Debug, Clone, PartialEq)]
 pub struct QualifiedRule {
     prelude: Vec<ComponentValue>,
     block: SimpleBlock,
 }
 
+/// <https://www.w3.org/TR/css-syntax-3/#component-value>
 #[derive(Debug, Clone, PartialEq)]
 pub enum ComponentValue {
+    /// <https://www.w3.org/TR/css-syntax-3/#preserved-tokens>
     PreservedToken(CssToken),
 }
 
+/// <https://www.w3.org/TR/css-syntax-3/#simple-block>
 #[derive(Debug, Clone, PartialEq)]
 pub struct SimpleBlock {
     value: Vec<ComponentValue>,

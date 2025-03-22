@@ -1,23 +1,38 @@
 use alloc::string::String;
 use alloc::vec::Vec;
 
+/// <https://www.w3.org/TR/css-syntax-3/#token-diagrams>
 #[derive(Debug, Clone, PartialEq)]
 pub enum CssToken {
+    /// <https://www.w3.org/TR/css-syntax-3/#hash-token-diagram>
     Hash(String),
+    /// <https://www.w3.org/TR/css-syntax-3/#delim-token-diagram>
     Delim(char),
+    /// <https://www.w3.org/TR/css-syntax-3/#number-token-diagram>
     Number(f64),
+    /// <https://www.w3.org/TR/css-syntax-3/#colon-token-diagram>
     Colon,
+    /// <https://www.w3.org/TR/css-syntax-3/#semicolon-token-diagram>
     SemiColon,
+    /// <https://www.w3.org/TR/css-syntax-3/#open-paren-token-diagram>
     OpenParenthesis,
+    /// <https://www.w3.org/TR/css-syntax-3/#close-paren-token-diagram>
     CloseParenthesis,
+    /// <https://www.w3.org/TR/css-syntax-3/#open-curly-token-diagram>
     OpenCurly,
+    /// <https://www.w3.org/TR/css-syntax-3/#close-curly-token-diagram>
     CloseCurly,
+    /// <https://www.w3.org/TR/css-syntax-3/#ident-token-diagram>
     Ident(String),
+    /// <https://www.w3.org/TR/css-syntax-3/#string-token-diagram>
     String(String),
+    /// <https://www.w3.org/TR/css-syntax-3/#at-keyword-token-diagram>
     AtKeyword(String),
+    /// <https://www.w3.org/TR/css-syntax-3/#whitespace-token-diagram>
     Whitespace,
 }
 
+/// <https://www.w3.org/TR/css-syntax-3/#tokenization>
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CssTokenizer {
     input: Vec<char>,
@@ -25,6 +40,7 @@ pub struct CssTokenizer {
 }
 
 impl CssTokenizer {
+    /// Creates a new tokenizer for the given CSS input
     pub fn new(input: String) -> Self {
         Self {
             input: input.chars().collect(),
@@ -42,6 +58,7 @@ impl Iterator for CssTokenizer {
 }
 
 impl CssTokenizer {
+    /// <https://www.w3.org/TR/css-syntax-3/#consume-token>
     fn consume_token(&mut self) -> Option<CssToken> {
         self.consume_comments();
         match self.consume_input() {
@@ -76,6 +93,7 @@ impl CssTokenizer {
         }
     }
 
+    /// <https://www.w3.org/TR/css-syntax-3/#consume-comments>
     fn consume_comments(&mut self) {
         // TODO: implement
     }
@@ -95,12 +113,14 @@ impl CssTokenizer {
         self.pos -= 1;
     }
 
+    /// <https://www.w3.org/TR/css-syntax-3/#consume-an-ident-like-token>
     fn consume_ident_like_token(&mut self) -> CssToken {
         let string = self.consume_ident_sequence();
         // TODO: handle url, function
         CssToken::Ident(string)
     }
 
+    /// <https://www.w3.org/TR/css-syntax-3/#consume-name>
     fn consume_ident_sequence(&mut self) -> String {
         let mut result = String::new();
         loop {
@@ -117,6 +137,7 @@ impl CssTokenizer {
         }
     }
 
+    /// <https://www.w3.org/TR/css-syntax-3/#consume-a-token> (step 2)
     fn consume_whitespaces(&mut self) {
         loop {
             match self.consume_input() {
@@ -129,6 +150,7 @@ impl CssTokenizer {
         }
     }
 
+    /// <https://www.w3.org/TR/css-syntax-3/#consume-a-string-token>
     fn consume_string_token(&mut self) -> CssToken {
         let ending_code_point = self.current_input();
         let mut string = String::new();
@@ -153,12 +175,14 @@ impl CssTokenizer {
         self.input[self.pos - 1]
     }
 
+    /// <https://www.w3.org/TR/css-syntax-3/#consume-a-numeric-token>
     fn consume_numeric_token(&mut self) -> CssToken {
         let number = self.consume_number();
         // TODO: handle dimension
         CssToken::Number(number)
     }
 
+    /// <https://www.w3.org/TR/css-syntax-3/#consume-a-number>
     fn consume_number(&mut self) -> f64 {
         let mut repr = String::new();
         loop {
@@ -178,10 +202,12 @@ impl CssTokenizer {
     }
 }
 
+/// <https://www.w3.org/TR/css-syntax-3/#check-if-three-code-points-would-start-an-identifier>
 fn is_ident_start_code_point(c: char) -> bool {
     c.is_ascii_alphabetic() || !c.is_ascii() || c == '_'
 }
 
+/// <https://www.w3.org/TR/css-syntax-3/#ident-code-point>
 fn is_ident_code_point(c: char) -> bool {
     is_ident_start_code_point(c) || c.is_ascii_digit() || c == '-'
 }
