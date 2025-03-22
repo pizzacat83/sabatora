@@ -14,6 +14,7 @@ pub struct CssStyleSheet {
 type CssRule = CssStyleRule;
 
 /// <https://www.w3.org/TR/cssom-1/#cssstylerule>
+/// <https://github.com/servo/stylo/blob/4b44fbdb7f93c3f57eb99ad5f14cda5e82af4467/style/stylesheets/style_rule.rs#L25>
 #[derive(Debug, Clone, PartialEq)]
 pub struct CssStyleRule {
     pub selector: SelectorList,
@@ -27,6 +28,10 @@ pub struct CssStyleDeclaration {
 }
 
 /// <https://www.w3.org/TR/cssom-1/#css-declaration>
+///
+/// Servo's counterpart is [stylo::properties::generated::PropertyDeclaration](https://docs.rs/stylo/latest/stylo/properties/generated/enum.PropertyDeclaration.html),
+/// an enum defined by code generation, like
+/// `enum {BackgroundImage, Display(Display), TextAlign(TextAlign), ... }`
 #[derive(Debug, Clone, PartialEq)]
 pub struct CssDeclaration {
     pub property_name: String,
