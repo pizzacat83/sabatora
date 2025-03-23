@@ -1,4 +1,7 @@
-use crate::renderer::layout::computed_style::ComputedStyle;
+use crate::renderer::layout::{
+    computed_style::ComputedStyle,
+    layout_object::{LayoutPoint, LayoutSize},
+};
 use alloc::string::String;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -13,15 +16,4 @@ pub enum DisplayItem {
         style: ComputedStyle,
         layout_point: LayoutPoint,
     },
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct LayoutPoint {
-    pub x: i64,
-    pub y: i64,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct LayoutSize {
-    // TODO
 }

@@ -4,14 +4,14 @@ use alloc::vec;
 use alloc::vec::Vec;
 use core::cell::RefCell;
 
-use crate::display_item::{DisplayItem, LayoutPoint};
+use crate::display_item::{self, DisplayItem};
 use crate::renderer::layout::computed_style::{ComputedStyle, DisplayType};
 use crate::renderer::{
     css::cssom::CssStyleSheet,
     dom::node::{ElementKind, Node},
 };
 
-use super::layout_object::LayoutObject;
+use super::layout_object::{LayoutObject, LayoutObjectKind, LayoutPoint, LayoutSize};
 
 #[derive(Debug, Clone)]
 pub struct LayoutView {
@@ -34,13 +34,29 @@ impl LayoutView {
     }
 
     pub(crate) fn paint(&self) -> Vec<DisplayItem> {
-        vec![DisplayItem::Text {
-            text: "Hello, world!".into(),
-            style: ComputedStyle {
-                display: Some(DisplayType::Block),
-            },
-            layout_point: LayoutPoint { x: 0, y: 0 },
-        }]
+        // vec![DisplayItem::Text {
+        //     text: "Hello, world!".into(),
+        //     style: ComputedStyle {
+        //         display: Some(DisplayType::Block),
+        //     },
+        //     layout_point: LayoutPoint { x: 0, y: 0 },
+        // }]
+
+        let mut display_items = Vec::new();
+
+        Self::paint_node(&self.root, &mut display_items);
+
+        display_items
+    }
+
+    fn paint_node(node: &Option<Rc<RefCell<LayoutObject>>>, display_item: &mut Vec<DisplayItem>) {
+        if let Some(node) = node {
+            display_item.extend(node.borrow().paint());
+
+            // traverse the tree
+            Self::paint_node(&node.borrow().first_child, display_item);
+            Self::paint_node(&node.borrow().next_sibling, display_item);
+        }
     }
 }
 
@@ -50,7 +66,25 @@ fn build_layout_tree(
     cssom: &CssStyleSheet,
 ) -> Option<Rc<RefCell<LayoutObject>>> {
     // TODO
-    None
+    if let Some(node) = node {
+        Some(Rc::new(RefCell::new(LayoutObject {
+            kind: LayoutObjectKind::Text,
+            node: Rc::clone(node),
+            first_child: None,
+            next_sibling: None,
+            parent: Weak::new(),
+            style: ComputedStyle {
+                display: Some(DisplayType::Block),
+            },
+            point: LayoutPoint { x: 0, y: 0 },
+            size: LayoutSize {
+                width: 0,
+                height: 0,
+            },
+        })))
+    } else {
+        None
+    }
 }
 
 // TODO: find specification of the list of stylesheet sources

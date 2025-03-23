@@ -5,7 +5,7 @@ use core::cell::RefCell;
 
 use crate::{
     browser::Browser,
-    display_item::{DisplayItem, LayoutPoint},
+    display_item::DisplayItem,
     renderer::layout::computed_style::{ComputedStyle, DisplayType},
 };
 
