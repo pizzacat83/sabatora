@@ -2,6 +2,7 @@
 
 extern crate alloc;
 
+pub mod browser;
 pub mod display_item;
 pub mod error;
 pub mod http;

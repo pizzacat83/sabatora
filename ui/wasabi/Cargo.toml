@@ -1,0 +1,10 @@
+[package]
+name = "ui_wasabi"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+saba_core = { path = "../../saba_core" }
+noli = { git = "https://github.com/hikalium/wasabi.git", branch = "for_saba" }

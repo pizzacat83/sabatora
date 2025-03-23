@@ -118,6 +118,7 @@ dependencies = [
  "net_wasabi",
  "noli",
  "saba_core",
+ "ui_wasabi",
 ]
 
 [[package]]
@@ -138,6 +139,14 @@ dependencies = [
  "proc-macro2",
  "quote",
  "unicode-ident",
+]
+
+[[package]]
+name = "ui_wasabi"
+version = "0.1.0"
+dependencies = [
+ "noli",
+ "saba_core",
 ]
 
 [[package]]
