@@ -1,6 +1,11 @@
 use alloc::rc::{Rc, Weak};
+use alloc::string::String;
+use alloc::vec;
+use alloc::vec::Vec;
 use core::cell::RefCell;
 
+use crate::display_item::{DisplayItem, LayoutPoint};
+use crate::renderer::layout::computed_style::{ComputedStyle, DisplayType};
 use crate::renderer::{
     css::cssom::CssStyleSheet,
     dom::node::{ElementKind, Node},
@@ -14,7 +19,7 @@ pub struct LayoutView {
 }
 
 impl LayoutView {
-    fn layout(dom: Rc<RefCell<Node>>, cssom: &CssStyleSheet) -> LayoutView {
+    pub fn layout(dom: Rc<RefCell<Node>>, cssom: &CssStyleSheet) -> LayoutView {
         let body_dom = Node::get_element_by_tag_name(dom, ElementKind::Body);
         let mut layout = LayoutView {
             root: build_layout_tree(&body_dom, &None, cssom),
@@ -24,8 +29,18 @@ impl LayoutView {
         layout
     }
 
-    fn update_layout(&self) {
-        todo!()
+    fn update_layout(&mut self) {
+        // TODO
+    }
+
+    pub(crate) fn paint(&self) -> Vec<DisplayItem> {
+        vec![DisplayItem::Text {
+            text: "Hello, world!".into(),
+            style: ComputedStyle {
+                display: Some(DisplayType::Block),
+            },
+            layout_point: LayoutPoint { x: 0, y: 0 },
+        }]
     }
 }
 
@@ -34,7 +49,15 @@ fn build_layout_tree(
     parent_obj: &Option<Rc<RefCell<LayoutObject>>>,
     cssom: &CssStyleSheet,
 ) -> Option<Rc<RefCell<LayoutObject>>> {
-    todo!()
+    // TODO
+    None
+}
+
+// TODO: find specification of the list of stylesheet sources
+pub fn get_style_content(root: Rc<RefCell<Node>>) -> String {
+    Node::get_element_by_tag_name(root, ElementKind::Style)
+        .map(|elem| elem.borrow().text_content())
+        .unwrap_or_default()
 }
 
 #[cfg(test)]
@@ -70,12 +93,5 @@ mod tests {
         let style = get_style_content(dom.clone());
         let cssom = parse_css_stylesheet(style);
         LayoutView::layout(dom, &cssom)
-    }
-
-    // TODO: find specification of the list of stylesheet sources
-    fn get_style_content(root: Rc<RefCell<Node>>) -> String {
-        Node::get_element_by_tag_name(root, ElementKind::Style)
-            .map(|elem| elem.borrow().text_content())
-            .unwrap_or_default()
     }
 }

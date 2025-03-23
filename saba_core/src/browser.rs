@@ -26,4 +26,8 @@ impl Browser {
 
         browser
     }
+
+    pub fn current_page(&self) -> Rc<RefCell<Page>> {
+        Rc::clone(&self.pages[self.active_page_index])
+    }
 }

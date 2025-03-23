@@ -55,18 +55,30 @@ impl WasabiUI {
 
     /// A method just for development
     fn test_display_page(&mut self) -> Result<()> {
+        let html = "<html>
+<head></head>
+<body>
+    <h1>Test Page</h1>
+    <p>Hello, World!</p>
+</body>
+</html>";
+        self.browser
+            .borrow()
+            .current_page()
+            .borrow_mut()
+            .populate_frame(html.into());
+
         self.update_ui()?;
         Ok(())
     }
 
     fn update_ui(&mut self) -> Result<()> {
-        let display_items = vec![DisplayItem::Text {
-            text: "Hello, world!".into(),
-            style: ComputedStyle {
-                display: Some(DisplayType::Block),
-            },
-            layout_point: LayoutPoint { x: 0, y: 0 },
-        }];
+        let display_items = self
+            .browser
+            .borrow()
+            .current_page()
+            .borrow()
+            .display_items();
 
         for item in display_items {
             match item {
