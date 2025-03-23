@@ -224,6 +224,32 @@ impl Node {
             node_ref.parent = Rc::downgrade(&parent);
         }
     }
+
+    pub fn get_element_by_tag_name(
+        node: Rc<RefCell<Self>>,
+        tag: ElementKind,
+    ) -> Option<Rc<RefCell<Self>>> {
+        if let NodeData::Element(Element { kind, .. }) = &node.borrow().data {
+            if kind == &tag {
+                return Some(node.clone());
+            }
+        }
+        node.borrow()
+            .children()
+            .find_map(|node| Self::get_element_by_tag_name(node, tag.clone()))
+    }
+
+    pub fn text_content(&self) -> String {
+        let mut content = String::new();
+        if let NodeData::Text(s) = &self.data {
+            content += s;
+        }
+        for node in self.children() {
+            content += &node.borrow().text_content()
+        }
+
+        content
+    }
 }
 
 pub struct NodeChildrenIterator {
