@@ -17,7 +17,8 @@ pub enum DisplayItem {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LayoutPoint {
-    // TODO
+    pub x: i64,
+    pub y: i64,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

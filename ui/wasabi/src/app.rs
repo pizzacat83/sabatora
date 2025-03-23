@@ -1,7 +1,12 @@
 use core::cell::RefCell;
 
+use alloc::format;
 use alloc::rc::Rc;
+use alloc::vec;
+use noli::window::StringSize;
 use noli::window::Window;
+use saba_core::display_item::{DisplayItem, LayoutPoint};
+use saba_core::renderer::layout::computed_style::{ComputedStyle, DisplayType};
 use saba_core::{browser::Browser, error::Error};
 
 #[derive(Debug)]
@@ -9,6 +14,8 @@ pub struct WasabiUI {
     browser: Rc<RefCell<Browser>>,
     window: Window,
 }
+
+type Result<T> = core::result::Result<T, Error>;
 
 impl WasabiUI {
     pub fn new(browser: Rc<RefCell<Browser>>) -> Self {
@@ -26,21 +33,67 @@ impl WasabiUI {
         }
     }
 
-    pub fn start(&mut self) -> Result<(), Error> {
+    pub fn start(&mut self) -> Result<()> {
         self.setup()?;
 
         self.run_app()?;
 
+        self.test_display_page()?;
+
         Ok(())
     }
 
-    fn setup(&mut self) -> Result<(), Error> {
+    fn setup(&mut self) -> Result<()> {
         // TODO: setup toolbar
         self.window.flush();
         Ok(())
     }
 
-    fn run_app(&mut self) -> Result<(), Error> {
+    fn run_app(&mut self) -> Result<()> {
+        Ok(())
+    }
+
+    /// A method just for development
+    fn test_display_page(&mut self) -> Result<()> {
+        self.update_ui()?;
+        Ok(())
+    }
+
+    fn update_ui(&mut self) -> Result<()> {
+        let display_items = vec![DisplayItem::Text {
+            text: "Hello, world!".into(),
+            style: ComputedStyle {
+                display: Some(DisplayType::Block),
+            },
+            layout_point: LayoutPoint { x: 0, y: 0 },
+        }];
+
+        for item in display_items {
+            match item {
+                DisplayItem::Text {
+                    text,
+                    style,
+                    layout_point,
+                } => self
+                    .window
+                    .draw_string(
+                        BLACK, // TODO: use style
+                        layout_point.x + WINDOW_PADDING,
+                        layout_point.y + WINDOW_PADDING + TOOLBAR_HEIGHT,
+                        &text,
+                        StringSize::Medium, // TODO: use style
+                        false,              // TODO: use style
+                    )
+                    .map_err(|error| {
+                        Error::InvalidUI(format!("failed to draw string: {:?}", error))
+                    }),
+                _ => {
+                    todo!()
+                }
+            }?;
+        }
+        self.window.flush();
+
         Ok(())
     }
 }
@@ -64,3 +117,4 @@ pub const WINDOW_INIT_X_POS: i64 = 30;
 pub const WINDOW_INIT_Y_POS: i64 = 50;
 
 pub const WHITE: u32 = 0xffffff;
+pub const BLACK: u32 = 0x000000;
