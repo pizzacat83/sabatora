@@ -17,6 +17,7 @@ use super::html::token::HtmlTokenizer;
 use super::layout::box_tree::construct_box_tree;
 use super::layout::layout_view::{get_style_content, LayoutView};
 use super::layout::paint::paint;
+use super::layout::position::position;
 use alloc::string::String;
 
 #[derive(Debug, Clone)]
@@ -54,8 +55,9 @@ impl Page {
             let layout_view = LayoutView::layout(dom, cssom);
 
             let box_tree = construct_box_tree(layout_view);
+            let positioned = position(box_tree);
 
-            paint(box_tree)
+            paint(positioned)
         } else {
             Vec::new()
         }
