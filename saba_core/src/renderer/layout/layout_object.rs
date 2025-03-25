@@ -20,8 +20,6 @@ pub struct LayoutObject {
     pub next_sibling: Option<Rc<RefCell<LayoutObject>>>,
     pub parent: Weak<RefCell<LayoutObject>>,
     pub style: ComputedStyle,
-    pub point: LayoutPoint,
-    pub size: LayoutSize,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

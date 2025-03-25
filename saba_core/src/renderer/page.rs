@@ -14,7 +14,9 @@ use super::css::parser::parse_css_stylesheet;
 use super::dom::node::Window;
 use super::html::parser::HtmlParser;
 use super::html::token::HtmlTokenizer;
+use super::layout::box_tree::construct_box_tree;
 use super::layout::layout_view::{get_style_content, LayoutView};
+use super::layout::paint::paint;
 use alloc::string::String;
 
 #[derive(Debug, Clone)]
@@ -51,9 +53,9 @@ impl Page {
             let dom = frame.borrow().document();
             let layout_view = LayoutView::layout(dom, cssom);
 
-            let display_items = layout_view.paint();
+            let box_tree = construct_box_tree(layout_view);
 
-            display_items
+            paint(box_tree)
         } else {
             Vec::new()
         }

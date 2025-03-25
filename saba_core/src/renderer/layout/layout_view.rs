@@ -13,6 +13,7 @@ use crate::renderer::{
 
 use super::layout_object::{LayoutObject, LayoutObjectKind, LayoutPoint, LayoutSize};
 
+// TODO: refactoring
 #[derive(Debug, Clone)]
 pub struct LayoutView {
     root: Option<Rc<RefCell<LayoutObject>>>,
@@ -21,41 +22,8 @@ pub struct LayoutView {
 impl LayoutView {
     pub fn layout(dom: Rc<RefCell<Node>>, cssom: &CssStyleSheet) -> LayoutView {
         let body_dom = Node::get_element_by_tag_name(dom, ElementKind::Body);
-        let mut layout = LayoutView {
+        LayoutView {
             root: build_layout_tree(&body_dom, &None, cssom),
-        };
-        layout.update_layout();
-
-        layout
-    }
-
-    fn update_layout(&mut self) {
-        // TODO
-    }
-
-    pub(crate) fn paint(&self) -> Vec<DisplayItem> {
-        // vec![DisplayItem::Text {
-        //     text: "Hello, world!".into(),
-        //     style: ComputedStyle {
-        //         display: Some(DisplayType::Block),
-        //     },
-        //     layout_point: LayoutPoint { x: 0, y: 0 },
-        // }]
-
-        let mut display_items = Vec::new();
-
-        Self::paint_node(&self.root, &mut display_items);
-
-        display_items
-    }
-
-    fn paint_node(node: &Option<Rc<RefCell<LayoutObject>>>, display_item: &mut Vec<DisplayItem>) {
-        if let Some(node) = node {
-            display_item.extend(node.borrow().paint());
-
-            // traverse the tree
-            Self::paint_node(&node.borrow().first_child, display_item);
-            Self::paint_node(&node.borrow().next_sibling, display_item);
         }
     }
 }
@@ -75,11 +43,6 @@ fn build_layout_tree(
             parent: Weak::new(),
             style: ComputedStyle {
                 display: Some(DisplayType::Block),
-            },
-            point: LayoutPoint { x: 0, y: 0 },
-            size: LayoutSize {
-                width: 0,
-                height: 0,
             },
         })))
     } else {

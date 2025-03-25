@@ -5,8 +5,9 @@ use alloc::rc::Rc;
 use alloc::vec;
 use noli::window::StringSize;
 use noli::window::Window;
-use saba_core::display_item::{DisplayItem, LayoutPoint};
+use saba_core::display_item::DisplayItem;
 use saba_core::renderer::layout::computed_style::{ComputedStyle, DisplayType};
+use saba_core::renderer::layout::layout_object::LayoutPoint;
 use saba_core::{browser::Browser, error::Error};
 
 #[derive(Debug)]
@@ -55,13 +56,7 @@ impl WasabiUI {
 
     /// A method just for development
     fn test_display_page(&mut self) -> Result<()> {
-        let html = "<html>
-<head></head>
-<body>
-    <h1>Test Page</h1>
-    <p>Hello, World!</p>
-</body>
-</html>";
+        let html = r#"<!doctype html><html><head></head><body><a>inline1 inline1 inline1</a>inline2 inline2 inline2<a>inline3 inline3 inline3<p>block4 block4 block4</p><p>block5 block5 block5</p>inline6 inline6 inline6</body></html>"#;
         self.browser
             .borrow()
             .current_page()
