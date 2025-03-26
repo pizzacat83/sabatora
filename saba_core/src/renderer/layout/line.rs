@@ -18,7 +18,7 @@ pub struct LineBox {
     pub children: Vec<InlineBox>,
 }
 
-fn split_inline_box(tree: InlineBox, max_width: i64) -> Vec<LineBox> {
+pub fn split_inline_box(tree: Vec<InlineBox>, max_width: i64) -> Vec<LineBox> {
     vec![]
 }
 
@@ -31,14 +31,14 @@ mod tests {
 
     #[test]
     fn test_simple() {
-        let tree = InlineBox {
+        let tree = vec![InlineBox {
             data: InlineBoxData::Anonymous,
             style: ComputedStyle {
                 display: Some(DisplayType::Inline),
             },
             text: Some("text text text text text text".into()),
             children: Vec::new(),
-        };
+        }];
 
         let expected = vec![
             LineBox {

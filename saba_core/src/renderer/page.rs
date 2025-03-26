@@ -15,6 +15,7 @@ use super::dom::node::Window;
 use super::html::parser::HtmlParser;
 use super::html::token::HtmlTokenizer;
 use super::layout::box_tree::construct_box_tree;
+use super::layout::layout_object::LayoutSize;
 use super::layout::layout_view::{get_style_content, LayoutView};
 use super::layout::paint::paint;
 use super::layout::position::position;
@@ -49,13 +50,13 @@ impl Page {
         self.style = Some(cssom);
     }
 
-    pub fn display_items(&self) -> Vec<DisplayItem> {
+    pub fn display_items(&self, viewport_size: LayoutSize) -> Vec<DisplayItem> {
         if let (Some(frame), Some(cssom)) = (&self.frame, &self.style) {
             let dom = frame.borrow().document();
             let layout_view = LayoutView::layout(dom, cssom);
 
             let box_tree = construct_box_tree(layout_view);
-            let positioned = position(box_tree);
+            let positioned = position(box_tree, viewport_size);
 
             paint(positioned)
         } else {
