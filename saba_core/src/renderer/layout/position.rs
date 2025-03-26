@@ -1,8 +1,9 @@
 use super::{
-    box_tree::{BlockBox, BlockBoxChildren, BlockBoxData, InlineBoxData},
+    box_tree::{BlockBox, BlockBoxChildren, BlockBoxData, InlineBox, InlineBoxData},
     computed_style::ComputedStyle,
     layout_object::{LayoutPoint, LayoutSize},
     line::{split_inline_box, LineBox},
+    text::size_of_text,
 };
 use alloc::string::String;
 use alloc::vec::Vec;
@@ -57,7 +58,10 @@ fn position_block_box(tree: BlockBox, width: i64) -> PositionedBlockBox {
         ),
         BlockBoxChildren::Inlines(inlines) => {
             let lines = split_inline_box(inlines, width);
-            let positioned = lines.into_iter().map(position_line).collect();
+            let positioned = lines
+                .into_iter()
+                .map(|line| position_line(line, width))
+                .collect();
             PositionedBlockBoxChildren::Inlines(positioned)
         }
     };
@@ -72,36 +76,53 @@ fn position_block_box(tree: BlockBox, width: i64) -> PositionedBlockBox {
     }
 }
 
-fn position_line(line: LineBox) -> PositionedLineBox {
-    todo!()
+fn position_line(line: LineBox, width: i64) -> PositionedLineBox {
+    let children = line
+        .children
+        .into_iter()
+        .map(position_inline)
+        .collect::<Vec<_>>();
+    let LayoutSize { height, .. } = size_of_inline_children(&children[..]);
+    PositionedLineBox {
+        children,
+        size: LayoutSize { width, height },
+    }
+}
+
+fn position_inline(inline: InlineBox) -> PositionedInlineBox {
+    let children = inline
+        .children
+        .into_iter()
+        .map(position_inline)
+        .collect::<Vec<_>>();
+
+    let size = if let Some(text) = &inline.text {
+        size_of_text(text)
+    } else {
+        size_of_inline_children(&children[..])
+    };
+
+    PositionedInlineBox {
+        children,
+        size,
+        data: inline.data,
+        style: inline.style,
+        text: inline.text,
+    }
+}
+
+fn size_of_inline_children(children: &[PositionedInlineBox]) -> LayoutSize {
+    LayoutSize {
+        width: children.iter().map(|c| c.size.width).sum(),
+        height: children.iter().map(|c| c.size.height).max().unwrap_or(0),
+    }
 }
 
 fn height_of_block_children(children: &PositionedBlockBoxChildren) -> i64 {
-    todo!()
+    use PositionedBlockBoxChildren::*;
+    match children {
+        Empty => 0,
+        Blocks(blocks) => blocks.iter().map(|c| c.size.height).sum(),
+        Inlines(lines) => lines.iter().map(|c| c.size.height).sum(),
+    }
 }
-
-// fn initialize_positioned_tree(tree: BlockBox, viewport_size: LayoutSize) -> PositionedBlockBox {
-//     PositionedBlockBox {
-//         data: tree.data,
-//         style: tree.style,
-//         children: match tree.children {
-//             BlockBoxChildren::Empty => PositionedBoxChildren::Empty,
-//             BlockBoxChildren::Blocks(blocks) => PositionedBoxChildren::Blocks(
-//                 blocks
-//                     .into_iter()
-//                     .map(|block| initialize_positioned_tree(block, viewport_size))
-//                     .collect(),
-//             ),
-//             BlockBoxChildren::Inlines(inlines) => {
-//                 PositionedBoxChildren::Inlines(split_inline_box(inlines, viewport_size.width).map)
-//             }
-//         },
-//         region: Region {
-//             left_top: LayoutPoint { x: 0, y: 0 },
-//             size: LayoutSize {
-//                 width: viewport_size.width,
-//                 height: 0,
-//             },
-//         },
-//     }
-// }

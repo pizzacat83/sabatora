@@ -7,3 +7,4 @@ pub mod layout_view;
 pub mod line;
 pub mod paint;
 pub mod position;
+pub mod text;
