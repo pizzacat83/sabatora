@@ -125,7 +125,10 @@ impl HtmlParser {
                 }
             },
             InsertionMode::InBody => match token {
-                HtmlToken::Char('\t' | '\n' | '\x0c' | '\r' | ' ') => StepOutput::default(),
+                HtmlToken::Char(c @ ('\t' | '\n' | '\x0c' | '\r' | ' ')) => {
+                    self.insert_character(*c);
+                    StepOutput::default()
+                }
                 HtmlToken::Char(c) => {
                     self.insert_character(*c);
                     StepOutput::default()
@@ -562,7 +565,7 @@ mod tests {
 
     #[test]
     fn test_text() {
-        let html = "<!doctype html><html><head></head><body>text</body></html>".to_string();
+        let html = "<!doctype html><html><head></head><body>text text</body></html>".to_string();
         let t = HtmlTokenizer::new(html);
         let window = HtmlParser::new(t).construct_tree();
 
@@ -601,7 +604,7 @@ mod tests {
         assert_eq!(1, body_children.len());
         let text = body_children[0].clone();
         if let NodeData::Text(text) = text.borrow().data() {
-            assert_eq!("text", text);
+            assert_eq!("text text", text);
         } else {
             panic!("not a text");
         };
