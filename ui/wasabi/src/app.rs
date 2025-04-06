@@ -8,6 +8,7 @@ use noli::window::Window;
 use saba_core::display_item::DisplayItem;
 use saba_core::renderer::layout::computed_style::{ComputedStyle, DisplayType};
 use saba_core::renderer::layout::layout_object::LayoutPoint;
+use saba_core::renderer::layout::layout_object::LayoutSize;
 use saba_core::{browser::Browser, error::Error};
 
 #[derive(Debug)]
@@ -68,12 +69,15 @@ impl WasabiUI {
     }
 
     fn update_ui(&mut self) -> Result<()> {
-        let display_items = self
-            .browser
-            .borrow()
-            .current_page()
-            .borrow()
-            .display_items();
+        let display_items =
+            self.browser
+                .borrow()
+                .current_page()
+                .borrow()
+                .display_items(LayoutSize {
+                    width: CONTENT_AREA_WIDTH,
+                    height: CONTENT_AREA_HEIGHT,
+                });
 
         for item in display_items {
             match item {

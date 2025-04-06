@@ -12,12 +12,12 @@ use crate::renderer::html::attribute::Attribute;
 #[derive(Debug, Clone)]
 pub struct Node {
     pub data: NodeData,
-    window: Weak<RefCell<Window>>,
-    parent: Weak<RefCell<Node>>,
-    first_child: Option<Rc<RefCell<Node>>>,
-    last_child: Weak<RefCell<Node>>,
-    previous_sibling: Weak<RefCell<Node>>,
-    next_sibling: Option<Rc<RefCell<Node>>>,
+    pub window: Weak<RefCell<Window>>,
+    pub parent: Weak<RefCell<Node>>,
+    pub first_child: Option<Rc<RefCell<Node>>>,
+    pub last_child: Weak<RefCell<Node>>,
+    pub previous_sibling: Weak<RefCell<Node>>,
+    pub next_sibling: Option<Rc<RefCell<Node>>>,
 }
 
 // sababook did a custom implementation of PartialEq for Node, but I'm not sure why it's necessary.
@@ -35,8 +35,8 @@ pub struct Window {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Element {
-    kind: ElementKind,
-    attributes: Vec<Attribute>,
+    pub kind: ElementKind,
+    pub attributes: Vec<Attribute>,
 }
 
 impl Element {

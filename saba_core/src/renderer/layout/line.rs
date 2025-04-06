@@ -19,7 +19,8 @@ pub struct LineBox {
 }
 
 pub fn split_inline_box(tree: Vec<InlineBox>, max_width: i64) -> Vec<LineBox> {
-    vec![]
+    // TODO
+    vec![LineBox { children: tree }]
 }
 
 #[cfg(test)]

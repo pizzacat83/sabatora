@@ -5,18 +5,19 @@ use alloc::vec::Vec;
 use core::cell::RefCell;
 
 use crate::display_item::{self, DisplayItem};
+use crate::renderer::dom::node::{Element, NodeData};
 use crate::renderer::layout::computed_style::{ComputedStyle, DisplayType};
 use crate::renderer::{
     css::cssom::CssStyleSheet,
     dom::node::{ElementKind, Node},
 };
 
-use super::layout_object::{LayoutObject, LayoutObjectKind, LayoutPoint, LayoutSize};
+use super::layout_object::{LayoutObject, LayoutPoint, LayoutSize};
 
 // TODO: refactoring
 #[derive(Debug, Clone)]
 pub struct LayoutView {
-    root: Option<Rc<RefCell<LayoutObject>>>,
+    pub root: Option<Rc<RefCell<LayoutObject>>>,
 }
 
 impl LayoutView {
@@ -34,19 +35,58 @@ fn build_layout_tree(
     cssom: &CssStyleSheet,
 ) -> Option<Rc<RefCell<LayoutObject>>> {
     // TODO
-    if let Some(node) = node {
-        Some(Rc::new(RefCell::new(LayoutObject {
-            kind: LayoutObjectKind::Text,
-            node: Rc::clone(node),
+    node.as_ref().map(|node| {
+        let obj = Rc::new(RefCell::new(LayoutObject {
+            node: Rc::clone(&node),
             first_child: None,
             next_sibling: None,
-            parent: Weak::new(),
-            style: ComputedStyle {
-                display: Some(DisplayType::Block),
-            },
-        })))
-    } else {
-        None
+            parent: parent_obj
+                .as_ref()
+                .map(Rc::downgrade)
+                .unwrap_or_else(Weak::new),
+
+            // TODO: use cssom
+            style: default_style(&node.borrow().data),
+        }));
+        let first_child =
+            build_layout_tree(&node.borrow().first_child, &Some(Rc::clone(&obj)), cssom);
+        let next_sibling =
+            build_layout_tree(&node.borrow().next_sibling, &Some(Rc::clone(&obj)), cssom);
+
+        {
+            let mut obj = obj.borrow_mut();
+            obj.first_child = first_child;
+            obj.next_sibling = next_sibling;
+        }
+
+        obj
+    })
+}
+
+fn default_style(node_data: &NodeData) -> ComputedStyle {
+    let display = match node_data {
+        NodeData::Element(Element {
+            kind: ElementKind::A | ElementKind::Textarea,
+            ..
+        }) => DisplayType::Inline,
+        NodeData::Element(Element {
+            kind: ElementKind::Body | ElementKind::H1 | ElementKind::H2 | ElementKind::P,
+            ..
+        }) => DisplayType::Block,
+        NodeData::Element(Element {
+            kind: ElementKind::Head | ElementKind::Script | ElementKind::Style,
+            ..
+        }) => DisplayType::None,
+        NodeData::Element(Element {
+            kind: ElementKind::Html,
+            ..
+        }) => unreachable!(),
+        NodeData::Text(_) => DisplayType::Inline,
+        NodeData::Document => unreachable!(),
+    };
+
+    ComputedStyle {
+        display: Some(display),
     }
 }
 
@@ -66,7 +106,6 @@ mod tests {
         },
         dom::node::{Element, ElementKind, NodeData},
         html::{parser::HtmlParser, token::HtmlTokenizer},
-        layout::layout_object::LayoutObjectKind,
     };
 
     use super::*;
@@ -76,7 +115,6 @@ mod tests {
         let html = "<html><head></head><body></body></html>";
         let layout_view = create_layout_view(html);
         let root = layout_view.root.unwrap();
-        assert_eq!(LayoutObjectKind::Block, root.borrow().kind);
         assert_eq!(
             NodeData::Element(Element::new(ElementKind::Body)),
             root.borrow().node.borrow().data
