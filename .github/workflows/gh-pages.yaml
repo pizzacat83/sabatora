@@ -17,8 +17,8 @@ jobs:
     - name: Install Trunk
       run: |
         cd $(mktemp -d)
-        gh release download --repo trunk-rs/trunk --pattern 'trunk-aarch64-unknown-linux-musl.tar.gz'
-        tar -xzf trunk-aarch64-unknown-linux-musl.tar.gz
+        gh release download --repo trunk-rs/trunk --pattern 'trunk-x86_64-unknown-linux-musl.tar.gz'
+        tar -xzf trunk-x86_64-unknown-linux-musl.tar.gz
         pwd >> $GITHUB_PATH
       env:
         GH_TOKEN: ${{ github.token }}
