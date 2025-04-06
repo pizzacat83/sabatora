@@ -28,7 +28,7 @@ struct BlockBoxProps {
 #[function_component(BlockBoxC)]
 fn block_box(props: &BlockBoxProps) -> Html {
     let title = match props.block_box.data {
-        BlockBoxData::Element(ref element) => element.tag_name().to_string(),
+        BlockBoxData::Element(ref element) => format!("<{}>", element.tag_name()),
         BlockBoxData::Anonymous => "anonymous".to_string(),
     };
 
@@ -44,10 +44,19 @@ fn block_box(props: &BlockBoxProps) -> Html {
         BlockBoxChildren::Empty => html! {},
     };
 
+    let children_style = format!(
+        "padding: 1rem; display: flex; gap: 1rem; {}",
+        match props.block_box.children {
+            BlockBoxChildren::Blocks(_) => "flex-direction: column;",
+            BlockBoxChildren::Inlines(_) => "flex-direction: row;",
+            BlockBoxChildren::Empty => "",
+        }
+    );
+
     html! {
-        <div style="border: 1px solid black;">
+        <div style="border: 1px solid black; text-wrap-mode: nowrap; min-width: fit-content;">
             <div style="border-bottom: 1px solid black; padding: 0.2rem 1rem; background-color: #eee;">{title}</div>
-            <div style="padding: 1rem">{children}</div>
+            <div style={children_style}>{children}</div>
         </div>
     }
 }
@@ -60,7 +69,7 @@ struct InlineBoxProps {
 #[function_component(InlineBoxC)]
 fn inline_box(props: &InlineBoxProps) -> Html {
     let title = match props.inline_box.data {
-        InlineBoxData::Element(ref element) => element.tag_name().to_string(),
+        InlineBoxData::Element(ref element) => format!("<{}>", element.tag_name()),
         InlineBoxData::Anonymous => "anonymous".to_string(),
     };
 
