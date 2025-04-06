@@ -204,7 +204,7 @@ mod tests {
 
     #[test]
     fn test_simple() {
-        let html = r#"<!doctype html><html><head></head><body><a>inline1 inline1 inline1</a>inline2 inline2 inline2<a>inline3 inline3 inline3<p>block4 block4 block4</p><p>block5 block5 block5</p>inline6 inline6 inline6</body></html>"#;
+        let html = r#"<!doctype html><html><head></head><body><a>inline1 inline1 inline1</a>inline2 inline2 inline2<a>inline3 inline3 inline3</a><p>block4 block4 block4</p><p>block5 block5 block5</p>inline6 inline6 inline6</body></html>"#;
         let expected = BlockBox {
             data: BlockBoxData::Element(Element::new(ElementKind::Body)),
             style: ComputedStyle {
