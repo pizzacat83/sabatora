@@ -1,16 +1,11 @@
 use saba_core::renderer::css::parser::parse_css_stylesheet;
-use saba_core::renderer::dom::node::{Element, ElementKind, NodeData};
 use saba_core::renderer::html::parser::HtmlParser;
 use saba_core::renderer::html::token::HtmlTokenizer;
 use saba_core::renderer::layout::box_tree::{
     construct_box_tree, BlockBoxChildren, InlineBox, InlineBoxData,
 };
+use saba_core::renderer::layout::box_tree::{BlockBox, BlockBoxData};
 use saba_core::renderer::layout::layout_view::{get_style_content, LayoutView};
-use saba_core::renderer::layout::{
-    box_tree::{BlockBox, BlockBoxData},
-    computed_style::ComputedStyle,
-    computed_style::DisplayType,
-};
 use web_sys::HtmlTextAreaElement;
 use yew::prelude::*;
 
