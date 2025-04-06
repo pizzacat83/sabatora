@@ -1,4 +1,4 @@
-workspace = { members = [ "net/wasabi", "saba_core", "ui/wasabi"] }
+workspace = { members = [ "net/wasabi", "saba_core", "ui/wasabi", "visualizer"] }
 
 [package]
 name = "saba"
