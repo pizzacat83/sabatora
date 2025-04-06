@@ -9,35 +9,34 @@ use saba_core::renderer::layout::layout_view::{get_style_content, LayoutView};
 use web_sys::HtmlTextAreaElement;
 use yew::prelude::*;
 
+const SAMPLE_HTML: &str = "<!doctype html><html><head></head><body><a>inline1 inline1 inline1</a>inline2 inline2 inline2<a>inline3 inline3 inline3</a><p>block4 block4 block4</p><p>block5 block5 block5</p>inline6 inline6 inline6</body></html>";
+
 #[function_component(App)]
 fn app() -> Html {
     let textarea_ref = use_node_ref();
 
-    let html = use_state(|| {
-        "<!doctype html><html><head></head><body><a>inline1 inline1 inline1</a>inline2 inline2 inline2<a>inline3 inline3 inline3</a><p>block4 block4 block4</p><p>block5 block5 block5</p>inline6 inline6 inline6</body></html>".to_string()
-    });
+    let html = use_state(|| SAMPLE_HTML.to_string());
+    let box_tree = use_state(|| Some(construct_box_tree_from_html(SAMPLE_HTML.to_string())));
 
     let on_submit = {
-        let textarea_ref = textarea_ref.clone();
         let html = html.clone();
+        let box_tree = box_tree.clone();
         Callback::from(move |_| {
-            html.set(textarea_ref.cast::<HtmlTextAreaElement>().unwrap().value());
+            box_tree.set(if html.is_empty() {
+                None
+            } else {
+                Some(construct_box_tree_from_html(html.to_string()))
+            });
         })
-    };
-
-    let box_tree = if html.is_empty() {
-        None
-    } else {
-        Some(construct_box_tree_from_html(html.to_string()))
     };
 
     html! {
         <>
-            <textarea ref={textarea_ref.clone()} value={html.to_string()} />
+            <textarea style="width: 100%; height: 10rem;" ref={textarea_ref.clone()} value={html.to_string()} oninput={Callback::from(move |_| html.set(textarea_ref.cast::<HtmlTextAreaElement>().unwrap().value()))} />
             <button onclick={on_submit}>{"Visualize"}</button>
-            {box_tree.map(|box_tree| {
+            {box_tree.as_ref().map(|box_tree| {
                 html! {
-                    <BlockBoxC block_box={box_tree} />
+                    <BlockBoxC block_box={box_tree.clone()} />
                 }
             })}
         </>
