@@ -32,12 +32,34 @@ fn block_box(props: &BlockBoxProps) -> Html {
         BlockBoxData::Anonymous => "anonymous".to_string(),
     };
 
+    let children = match props.block_box.children {
+        BlockBoxChildren::Blocks(ref blocks) => blocks
+            .iter()
+            .map(|block| html! { <BlockBoxC block_box={block.clone()} /> })
+            .collect::<Html>(),
+        BlockBoxChildren::Inlines(ref inlines) => inlines
+            .iter()
+            .map(|inline| html! { <InlineBoxC inline_box={inline.clone()} /> })
+            .collect::<Html>(),
+        BlockBoxChildren::Empty => html! {},
+    };
+
     html! {
         <div style="border: 1px solid black;">
             <div style="border-bottom: 1px solid black; padding: 0.2rem 1rem; background-color: #eee;">{title}</div>
-            // <div class="block-box-children">children</div>
+            <div style="padding: 1rem">{children}</div>
         </div>
     }
+}
+
+#[derive(Properties, PartialEq)]
+struct InlineBoxProps {
+    inline_box: InlineBox,
+}
+
+#[function_component(InlineBoxC)]
+fn inline_box(props: &InlineBoxProps) -> Html {
+    html! { "TODO" }
 }
 
 // TODO: use user-provided html
