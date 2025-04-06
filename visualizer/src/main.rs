@@ -59,7 +59,28 @@ struct InlineBoxProps {
 
 #[function_component(InlineBoxC)]
 fn inline_box(props: &InlineBoxProps) -> Html {
-    html! { "TODO" }
+    let title = match props.inline_box.data {
+        InlineBoxData::Element(ref element) => element.tag_name().to_string(),
+        InlineBoxData::Anonymous => "anonymous".to_string(),
+    };
+
+    let children = html! {
+        <>
+            {props.inline_box.text.clone()}
+            {
+                props.inline_box.children.iter().map(|child| {
+                    html! { <InlineBoxC inline_box={child.clone()} /> }
+                }).collect::<Html>()
+            }
+        </>
+    };
+
+    html! {
+        <div style="display: inline-block; border: 1px solid black; border-radius: 0.5rem;">
+            <div style="border-bottom: 1px solid black; padding: 0.2rem 1rem; background-color: #eee; border-radius: 0.5rem 0.5rem 0 0;">{title}</div>
+            <div style="padding: 1rem">{children}</div>
+        </div>
+    }
 }
 
 // TODO: use user-provided html
@@ -89,7 +110,7 @@ fn construct_box_tree() -> BlockBox {
                         style: ComputedStyle {
                             display: Some(DisplayType::Inline),
                         },
-                        text: Some("inline1 inline1 inline1".into()),
+                        text: Some("inline2 inline2 inline2".into()),
                         children: vec![],
                     },
                     InlineBox {
