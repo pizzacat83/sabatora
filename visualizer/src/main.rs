@@ -1,5 +1,11 @@
+use saba_core::renderer::css::parser::parse_css_stylesheet;
 use saba_core::renderer::dom::node::{Element, ElementKind, NodeData};
-use saba_core::renderer::layout::box_tree::{BlockBoxChildren, InlineBox, InlineBoxData};
+use saba_core::renderer::html::parser::HtmlParser;
+use saba_core::renderer::html::token::HtmlTokenizer;
+use saba_core::renderer::layout::box_tree::{
+    construct_box_tree, BlockBoxChildren, InlineBox, InlineBoxData,
+};
+use saba_core::renderer::layout::layout_view::{get_style_content, LayoutView};
 use saba_core::renderer::layout::{
     box_tree::{BlockBox, BlockBoxData},
     computed_style::ComputedStyle,
@@ -20,7 +26,7 @@ fn app() -> Html {
         Callback::from(move |_| {
             let html = textarea_ref.cast::<HtmlTextAreaElement>().unwrap().value();
 
-            box_tree.set(Some(construct_box_tree(html)));
+            box_tree.set(Some(construct_box_tree_from_html(html)));
         })
     };
 
@@ -114,89 +120,12 @@ fn inline_box(props: &InlineBoxProps) -> Html {
 }
 
 // TODO: use user-provided html
-fn construct_box_tree(html: String) -> BlockBox {
-    let expected = BlockBox {
-        data: BlockBoxData::Element(Element::new(ElementKind::Body)),
-        style: ComputedStyle {
-            display: Some(DisplayType::Block),
-        },
-        children: BlockBoxChildren::Blocks(vec![
-            BlockBox {
-                data: BlockBoxData::Anonymous,
-                style: ComputedStyle {
-                    display: Some(DisplayType::Block),
-                },
-                children: BlockBoxChildren::Inlines(vec![
-                    InlineBox {
-                        data: InlineBoxData::Element(Element::new(ElementKind::A)),
-                        style: ComputedStyle {
-                            display: Some(DisplayType::Inline),
-                        },
-                        text: Some("inline1 inline1 inline1".into()),
-                        children: vec![],
-                    },
-                    InlineBox {
-                        data: InlineBoxData::Anonymous,
-                        style: ComputedStyle {
-                            display: Some(DisplayType::Inline),
-                        },
-                        text: Some("inline2 inline2 inline2".into()),
-                        children: vec![],
-                    },
-                    InlineBox {
-                        data: InlineBoxData::Element(Element::new(ElementKind::A)),
-                        style: ComputedStyle {
-                            display: Some(DisplayType::Inline),
-                        },
-                        text: Some("inline3 inline3 inline3".into()),
-                        children: vec![],
-                    },
-                ]),
-            },
-            BlockBox {
-                data: BlockBoxData::Element(Element::new(ElementKind::P)),
-                style: ComputedStyle {
-                    display: Some(DisplayType::Block),
-                },
-                children: BlockBoxChildren::Inlines(vec![InlineBox {
-                    data: InlineBoxData::Anonymous,
-                    style: ComputedStyle {
-                        display: Some(DisplayType::Inline),
-                    },
-                    text: Some("block4 block4 block4".into()),
-                    children: vec![],
-                }]),
-            },
-            BlockBox {
-                data: BlockBoxData::Element(Element::new(ElementKind::P)),
-                style: ComputedStyle {
-                    display: Some(DisplayType::Block),
-                },
-                children: BlockBoxChildren::Inlines(vec![InlineBox {
-                    data: InlineBoxData::Anonymous,
-                    style: ComputedStyle {
-                        display: Some(DisplayType::Inline),
-                    },
-                    text: Some("block4 block4 block4".into()),
-                    children: vec![],
-                }]),
-            },
-            BlockBox {
-                data: BlockBoxData::Anonymous,
-                style: ComputedStyle {
-                    display: Some(DisplayType::Block),
-                },
-                children: BlockBoxChildren::Inlines(vec![InlineBox {
-                    data: InlineBoxData::Anonymous,
-                    style: ComputedStyle {
-                        display: Some(DisplayType::Inline),
-                    },
-                    text: Some("inline6 inline6 inline6".into()),
-                    children: vec![],
-                }]),
-            },
-        ]),
-    };
-
-    expected
+fn construct_box_tree_from_html(html: String) -> BlockBox {
+    let t = HtmlTokenizer::new(html);
+    let window = HtmlParser::new(t).construct_tree();
+    let dom = window.borrow().document();
+    let style = get_style_content(dom.clone());
+    let cssom = parse_css_stylesheet(style);
+    let layout_view = LayoutView::layout(dom, &cssom);
+    construct_box_tree(layout_view)
 }
