@@ -994,6 +994,7 @@ name = "visualizer"
 version = "0.1.0"
 dependencies = [
  "saba_core",
+ "web-sys",
  "yew",
 ]
 

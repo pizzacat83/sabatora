@@ -8,3 +8,4 @@ edition = "2021"
 [dependencies]
 yew = { git = "https://github.com/yewstack/yew/", features = ["csr"] }
 saba_core = { path = "../saba_core" }
+web-sys = "0.3.77"

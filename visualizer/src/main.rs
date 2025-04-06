@@ -5,14 +5,29 @@ use saba_core::renderer::layout::{
     computed_style::ComputedStyle,
     computed_style::DisplayType,
 };
+use web_sys::HtmlTextAreaElement;
 use yew::prelude::*;
 
 #[function_component(App)]
 fn app() -> Html {
+    let textarea_ref = use_node_ref();
+
     let box_tree = construct_box_tree();
 
+    let on_submit = {
+        let textarea_ref = textarea_ref.clone();
+        Callback::from(move |_| {
+            let html = textarea_ref.cast::<HtmlTextAreaElement>().unwrap().value();
+            println!("HTML: {}", html);
+        })
+    };
+
     html! {
-        <BlockBoxC block_box={box_tree} />
+        <>
+            <textarea placeholder="HTML here..." ref={textarea_ref.clone()} />
+            <button onclick={on_submit}>{"Visualize"}</button>
+            <BlockBoxC block_box={box_tree} />
+        </>
     }
 }
 
