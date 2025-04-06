@@ -16,7 +16,7 @@ jobs:
     - run: rustup target add wasm32-unknown-unknown
     - run: RUSTUP_TOOLCHAIN=stable cargo install trunk
 
-    - run: trunk build --release --public-url sabatora
+    - run: trunk build --release --public-url /sabatora
       working-directory: visualizer
 
     - name: Upload built files as artifact
