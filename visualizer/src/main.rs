@@ -12,13 +12,15 @@ use yew::prelude::*;
 fn app() -> Html {
     let textarea_ref = use_node_ref();
 
-    let box_tree = construct_box_tree();
+    let box_tree = use_state(|| None);
 
     let on_submit = {
         let textarea_ref = textarea_ref.clone();
+        let box_tree = box_tree.clone();
         Callback::from(move |_| {
             let html = textarea_ref.cast::<HtmlTextAreaElement>().unwrap().value();
-            println!("HTML: {}", html);
+
+            box_tree.set(Some(construct_box_tree(html)));
         })
     };
 
@@ -26,7 +28,11 @@ fn app() -> Html {
         <>
             <textarea placeholder="HTML here..." ref={textarea_ref.clone()} />
             <button onclick={on_submit}>{"Visualize"}</button>
-            <BlockBoxC block_box={box_tree} />
+            {box_tree.as_ref().map(|box_tree| {
+                html! {
+                    <BlockBoxC block_box={box_tree.clone()} />
+                }
+            })}
         </>
     }
 }
@@ -108,7 +114,7 @@ fn inline_box(props: &InlineBoxProps) -> Html {
 }
 
 // TODO: use user-provided html
-fn construct_box_tree() -> BlockBox {
+fn construct_box_tree(html: String) -> BlockBox {
     let expected = BlockBox {
         data: BlockBoxData::Element(Element::new(ElementKind::Body)),
         style: ComputedStyle {
