@@ -9,8 +9,10 @@ use yew::prelude::*;
 
 #[function_component(App)]
 fn app() -> Html {
+    let box_tree = construct_box_tree();
+
     html! {
-        <BlockBoxC />
+        <BlockBoxC block_box={box_tree} />
     }
 }
 
@@ -18,11 +20,21 @@ fn main() {
     yew::Renderer::<App>::new().render();
 }
 
+#[derive(Properties, PartialEq)]
+struct BlockBoxProps {
+    block_box: BlockBox,
+}
+
 #[function_component(BlockBoxC)]
-fn block_box() -> Html {
+fn block_box(props: &BlockBoxProps) -> Html {
+    let title = match props.block_box.data {
+        BlockBoxData::Element(ref element) => element.tag_name().to_string(),
+        BlockBoxData::Anonymous => "anonymous".to_string(),
+    };
+
     html! {
         <div style="border: 1px solid black;">
-            <div style="border-bottom: 1px solid black; padding: 0.2rem 1rem; background-color: #eee;">{"body"}</div>
+            <div style="border-bottom: 1px solid black; padding: 0.2rem 1rem; background-color: #eee;">{title}</div>
             // <div class="block-box-children">children</div>
         </div>
     }
