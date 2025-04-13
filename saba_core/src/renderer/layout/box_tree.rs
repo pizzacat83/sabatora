@@ -3,7 +3,7 @@
 
 use core::{cell::RefCell, mem};
 
-use crate::renderer::dom::node::{Element, ElementKind, NodeData};
+use crate::renderer::dom::node::{Element, ElementKind, Node, NodeData};
 use alloc::rc::Rc;
 use alloc::string::String;
 use alloc::vec;
@@ -34,6 +34,64 @@ pub enum BlockBoxChildren {
     Empty,
     Inlines(Vec<InlineBox>),
     Blocks(Vec<BlockBox>),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BlockBoxBlockChildrenBuilder {
+    committed_children: Vec<BlockBox>,
+    uncommitted_inlines: Option<Vec<InlineBox>>,
+    style: ComputedStyle,
+}
+
+impl BlockBoxBlockChildrenBuilder {
+    fn build_from_boxes(children: Vec<Box>, style: ComputedStyle) -> Vec<BlockBox> {
+        let mut builder = Self::new(style);
+
+        for child in children {
+            match child {
+                Box::Block(b) => builder.push_block(b.clone()),
+                Box::Inline(inline) => builder.push_inline(inline.clone()),
+            }
+        }
+
+        builder.build()
+    }
+
+    fn new(style: ComputedStyle) -> Self {
+        Self {
+            committed_children: Vec::new(),
+            uncommitted_inlines: None,
+            style,
+        }
+    }
+
+    fn push_block(&mut self, block: BlockBox) {
+        self.commit_inlines();
+        self.committed_children.push(block)
+    }
+
+    fn commit_inlines(&mut self) {
+        if let Some(inlines) = self.uncommitted_inlines.take() {
+            self.committed_children.push(BlockBox {
+                data: BlockBoxData::Anonymous,
+                style: self.style.clone(),
+                children: BlockBoxChildren::Inlines(inlines),
+            });
+        }
+    }
+
+    fn push_inline(&mut self, inline: InlineBox) {
+        if let Some(ref mut inlines) = self.uncommitted_inlines {
+            inlines.push(inline);
+        } else {
+            self.uncommitted_inlines = Some(vec![inline]);
+        }
+    }
+
+    fn build(mut self) -> Vec<BlockBox> {
+        self.commit_inlines();
+        self.committed_children
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -73,113 +131,111 @@ pub fn construct_box_tree(layout_view: LayoutView) -> BlockBox {
 
 fn produce_boxes(object: Rc<RefCell<LayoutObject>>) -> Vec<Box> {
     let object = object.borrow();
-    let children = object.children().flat_map(produce_boxes);
 
-    let mut b = match object.style.display {
+    // If the object is block, it produces a block box.
+    //   If all children are inline boxes, children is an inline box.
+    //   If some children are block boxes, children is a list of block boxes.
+    //     Adjacent inline boxes are wrapped in an anonymous block box.
+    // If the object is inline,
+    //   If all children are inline boxes, it produces an inline box.
+    //   If some children are block boxes, it produces an anonymous block box containing the inline segments before the block, the block, and inline segments after the block.
+    let b = match object.style.display {
         Some(DisplayType::Block) => {
-            if let NodeData::Element(element) = &object.node.borrow().data {
+            let children = object
+                .children()
+                .flat_map(produce_boxes)
+                .collect::<Vec<_>>();
+
+            let children = if children.is_empty() {
+                BlockBoxChildren::Empty
+            } else if children.iter().any(|c| matches!(c, Box::Block(_))) {
+                BlockBoxChildren::Blocks(BlockBoxBlockChildrenBuilder::build_from_boxes(
+                    children,
+                    object.style.clone(),
+                ))
+            } else {
+                BlockBoxChildren::Inlines(
+                    children
+                        .into_iter()
+                        .map(|c| match c {
+                            Box::Inline(c) => c,
+                            _ => unreachable!(),
+                        })
+                        .collect(),
+                )
+            };
+
+            Box::Block(BlockBox {
+                data: match &object.node.borrow().data {
+                    NodeData::Element(element) => BlockBoxData::Element(element.clone()),
+                    NodeData::Text(_) => unreachable!(),
+                    NodeData::Document => unreachable!(),
+                },
+                style: object.style.clone(),
+                children,
+            })
+        }
+        Some(DisplayType::Inline) => 'block: {
+            let children = object.children().collect::<Vec<_>>();
+            if children.len() == 1 {
+                if let NodeData::Text(text) = &children[0].borrow().node.borrow().data {
+                    let data = match &object.node.borrow().data {
+                        NodeData::Element(element) => InlineBoxData::Element(element.clone()),
+                        _ => unreachable!(),
+                    };
+                    break 'block Box::Inline(InlineBox {
+                        data,
+                        style: object.style.clone(),
+                        text: Some(text.clone()),
+                        children: Vec::new(),
+                    });
+                }
+            }
+
+            let children = children
+                .into_iter()
+                .flat_map(produce_boxes)
+                .collect::<Vec<_>>();
+
+            if children.iter().any(|c| matches!(c, Box::Block(_))) {
+                // If some children are block boxes, it produces an anonymous block box containing the inline segments before the block, the block, and inline segments after the block.
                 Box::Block(BlockBox {
-                    data: BlockBoxData::Element(element.clone()),
+                    data: BlockBoxData::Anonymous,
                     style: object.style.clone(),
-                    children: BlockBoxChildren::Empty,
+                    children: BlockBoxChildren::Blocks(
+                        BlockBoxBlockChildrenBuilder::build_from_boxes(
+                            children,
+                            object.style.clone(),
+                        ),
+                    ),
                 })
             } else {
-                unreachable!()
+                Box::Inline(match &object.node.borrow().data {
+                    NodeData::Element(element) => InlineBox {
+                        data: InlineBoxData::Element(element.clone()),
+                        style: object.style.clone(),
+                        text: None,
+                        children: children
+                            .into_iter()
+                            .map(|c| match c {
+                                Box::Inline(c) => c,
+                                _ => unreachable!(),
+                            })
+                            .collect(),
+                    },
+                    NodeData::Text(text) => InlineBox {
+                        data: InlineBoxData::Anonymous,
+                        style: object.style.clone(),
+                        text: Some(text.clone()),
+                        children: vec![],
+                    },
+                    NodeData::Document => unreachable!(),
+                })
             }
-        }
-        Some(DisplayType::Inline) => {
-            let data = match &object.node.borrow().data {
-                NodeData::Element(element) => InlineBoxData::Element(element.clone()),
-                NodeData::Text(_) => InlineBoxData::Anonymous,
-                NodeData::Document => unreachable!(),
-            };
-            let text = match &object.node.borrow().data {
-                NodeData::Text(text) => Some(text.into()),
-                _ => None,
-            };
-            Box::Inline(InlineBox {
-                data,
-                text,
-                style: object.style.clone(),
-                children: Vec::new(),
-            })
         }
         Some(DisplayType::None) => unreachable!(),
         None => unreachable!(),
     };
-
-    for child in children {
-        match (&mut b, child) {
-            (Box::Inline(ref mut b), Box::Inline(c)) => {
-                b.children.push(c);
-            }
-            (Box::Block(ref mut b_), Box::Inline(c)) => match &mut b_.children {
-                BlockBoxChildren::Empty => {
-                    b_.children = BlockBoxChildren::Inlines(vec![c]);
-                }
-                BlockBoxChildren::Inlines(children) => {
-                    children.push(c);
-                }
-                BlockBoxChildren::Blocks(children) => {
-                    match children
-                        .last_mut()
-                        .filter(|block| matches!(block.data, BlockBoxData::Anonymous))
-                    {
-                        Some(anon) => {
-                            if let BlockBoxChildren::Inlines(ref mut children) = anon.children {
-                                children.push(c);
-                            } else {
-                                // Anonymous block always contain inline boxes
-                                unreachable!();
-                            }
-                        }
-                        None => {
-                            let anon = BlockBox {
-                                data: BlockBoxData::Anonymous,
-                                style: b_.style.clone(),
-                                children: BlockBoxChildren::Inlines(vec![c]),
-                            };
-                            children.push(anon);
-                        }
-                    }
-                }
-            },
-            (Box::Block(ref mut b_), Box::Block(c)) => match &mut b_.children {
-                BlockBoxChildren::Empty => {
-                    b_.children = BlockBoxChildren::Blocks(vec![c]);
-                }
-                BlockBoxChildren::Blocks(children) => {
-                    children.push(c);
-                }
-                BlockBoxChildren::Inlines(inline_children) => {
-                    let block_children = vec![
-                        BlockBox {
-                            data: BlockBoxData::Anonymous,
-                            style: b_.style.clone(),
-                            children: BlockBoxChildren::Inlines(inline_children.clone()),
-                        },
-                        c,
-                    ];
-                    b_.children = BlockBoxChildren::Blocks(block_children);
-                }
-            },
-            (Box::Inline(b_), Box::Block(c)) => {
-                b = Box::Block(BlockBox {
-                    data: BlockBoxData::Anonymous,
-                    style: b_.style.clone(),
-                    children: BlockBoxChildren::Blocks(vec![
-                        BlockBox {
-                            data: BlockBoxData::Anonymous,
-                            style: b_.style.clone(),
-                            // TODO: is it possible to avoid clone here?
-                            children: BlockBoxChildren::Inlines(vec![b_.clone()]),
-                        },
-                        c,
-                    ]),
-                })
-            }
-        }
-    }
 
     vec![b]
 }
@@ -230,7 +286,7 @@ mod tests {
                             style: ComputedStyle {
                                 display: Some(DisplayType::Inline),
                             },
-                            text: Some("inline1 inline1 inline1".into()),
+                            text: Some("inline2 inline2 inline2".into()),
                             children: vec![],
                         },
                         InlineBox {
@@ -267,7 +323,7 @@ mod tests {
                         style: ComputedStyle {
                             display: Some(DisplayType::Inline),
                         },
-                        text: Some("block4 block4 block4".into()),
+                        text: Some("block5 block5 block5".into()),
                         children: vec![],
                     }]),
                 },
