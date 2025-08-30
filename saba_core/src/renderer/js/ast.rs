@@ -31,17 +31,23 @@ pub enum AdditiveOperator {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Program {
-    body: Vec<Rc<Node>>,
+    pub body: Vec<Rc<Node>>,
 }
 
-struct JsParser {
+pub struct JsParser {
     t: Peekable<JsLexer>,
 }
 
 type Result<T> = core::result::Result<T, String>;
 
 impl JsParser {
-    fn parse(&mut self) -> Program {
+    pub fn new(lexer: JsLexer) -> JsParser {
+        JsParser {
+            t: lexer.peekable(),
+        }
+    }
+
+    pub fn parse(&mut self) -> Program {
         let mut body = Vec::new();
 
         loop {
