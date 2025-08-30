@@ -67,13 +67,16 @@ mod tests {
 
     use super::*;
 
+    fn parse(input: &str) -> crate::renderer::js::ast::Program {
+        let lexer = JsLexer::new(input.into());
+        let mut parser = JsParser::new(lexer);
+        parser.parse()
+    }
+
     #[test]
     fn test_num() {
         let input = "42;";
-        let lexer = JsLexer::new(input.into());
-        let mut parser = JsParser::new(lexer);
-        let program = parser.parse();
-
+        let program = parse(input);
         let mut runtime = JsRuntime::new();
         for node in program.body {
             let result = runtime.eval(&node);
@@ -84,11 +87,21 @@ mod tests {
     #[test]
     fn test_add_nums() {
         let input = "1 + 2;";
-        let lexer = JsLexer::new(input.into());
-        let mut parser = JsParser::new(lexer);
-        let program = parser.parse();
-
+        let program = parse(input);
         let mut runtime = JsRuntime::new();
+
+        for node in program.body {
+            let result = runtime.eval(&node);
+            dbg!(&result);
+        }
+    }
+
+    #[test]
+    fn test_add_variable_and_num() {
+        let input = "var foo = 42; foo + 1";
+        let program = parse(input);
+        let mut runtime = JsRuntime::new();
+
         for node in program.body {
             let result = runtime.eval(&node);
             dbg!(&result);
