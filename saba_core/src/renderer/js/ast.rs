@@ -1,6 +1,7 @@
 use core::iter::Peekable;
 use core::panic;
 
+use alloc::boxed::Box;
 use alloc::format;
 use alloc::rc::Rc;
 use alloc::string::String;
@@ -21,6 +22,15 @@ pub enum Node {
     },
 
     NumericLiteral(u64),
+
+    VariableDeclarations {
+        declarations: Vec<VariableDeclaration>,
+    },
+}
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct VariableDeclaration {
+    id: String,
+    init: Box<Node>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -143,14 +153,25 @@ impl JsParser {
 mod tests {
     use super::*;
 
-    #[test]
-    fn test_add_nums() {
-        let input = "1 + 2;".into();
+    fn parse(input: String) -> Program {
         let lexer = JsLexer::new(input);
         let mut parser = JsParser {
             t: lexer.peekable(),
         };
-        let program = parser.parse();
+        parser.parse()
+    }
+
+    #[test]
+    fn test_add_nums() {
+        let input = "1 + 2;".into();
+        let program = parse(input);
+        dbg!(&program);
+    }
+
+    #[test]
+    fn test_var() {
+        let input = "var foo = 42; foo + 1;".into();
+        let program = parse(input);
         dbg!(&program);
     }
 }
