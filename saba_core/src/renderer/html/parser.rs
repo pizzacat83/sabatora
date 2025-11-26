@@ -1,4 +1,4 @@
-use core::{cell::RefCell, f32::consts::E};
+use core::cell::RefCell;
 
 use alloc::{
     rc::Rc,
@@ -329,6 +329,47 @@ impl HtmlParser {
 
     fn process_token_in_foreign_content(&mut self, token: &HtmlToken) -> StepOutput {
         match token {
+            // TODO: more tags
+            HtmlToken::StartTag { tag, .. } if tag == "br" || tag == "p" => {
+                unimplemented!()
+            }
+            // TODO: more tags
+            // HtmlToken::EndTag { tag } if tag == "br" || tag == "p" => {
+            //     unimplemented!()
+            // }
+            HtmlToken::StartTag {
+                tag,
+                self_closing,
+                attributes,
+            } => {
+                let adjusted_current_node_namespace = self
+                    .adjusted_current_node()
+                    .and_then(|node| {
+                        if let NodeData::Element(e) = &node.borrow().data {
+                            Some(e.kind.namespace())
+                        } else {
+                            None
+                        }
+                    })
+                    // The spec seems to assume there IS an element in the stack.
+                    // Makes sense – probably it's impossible to reach here without surrounding elements
+                    .unwrap();
+
+                // TODO: adjust tag name, attributes
+
+                self.insert_foreign_element_for_token(
+                    token,
+                    adjusted_current_node_namespace,
+                    false,
+                );
+
+                if *self_closing {
+                    unimplemented!()
+                }
+
+                StepOutput::default()
+            }
+
             HtmlToken::EndTag { tag } => {
                 if self.stack_of_open_elements.len() == 1 {
                     // "fragment case"

@@ -69,6 +69,8 @@ pub enum ElementKind {
     Textarea,
     Script,
     Svg,
+    SvgStyle,
+    SvgA,
     // Note: Maybe a fully-qualified name like SVGSVGElement is better?
 }
 
@@ -90,6 +92,8 @@ impl ElementKind {
             },
             Namespace::Svg => match local_name {
                 "svg" => Some(Self::Svg),
+                "style" => Some(Self::SvgStyle),
+                "a" => Some(Self::SvgA),
                 _ => None,
             },
         }
@@ -107,7 +111,10 @@ impl ElementKind {
             Self::A => Namespace::Html,
             Self::Textarea => Namespace::Html,
             Self::Script => Namespace::Html,
+
             Self::Svg => Namespace::Svg,
+            Self::SvgStyle => Namespace::Svg,
+            Self::SvgA => Namespace::Svg,
         }
     }
 }
@@ -153,6 +160,8 @@ impl Display for ElementKind {
             Self::Textarea => write!(f, "textarea"),
             Self::Script => write!(f, "script"),
             Self::Svg => write!(f, "svg"),
+            Self::SvgStyle => write!(f, "style"),
+            Self::SvgA => write!(f, "a"),
         }
     }
 }
@@ -203,7 +212,8 @@ impl Node {
     ) -> Rc<RefCell<Node>> {
         let element = Node {
             data: NodeData::Element(Element {
-                kind: ElementKind::from_name(local_name, namespace).unwrap(),
+                kind: ElementKind::from_name(local_name, namespace.clone())
+                    .unwrap_or_else(|| panic!("unknown element: {namespace:?}::{local_name}")),
                 attributes: Vec::new(),
             }),
             window: document.borrow().window.clone(),
