@@ -243,6 +243,7 @@ pub enum State {
     Doctype,
     BeforeDoctypeName,
     DoctypeName,
+    Rawtext,
     Rcdata,
     RcdataLessThanSign,
     RcdataEndTagOpen,
@@ -290,6 +291,17 @@ impl HtmlTokenizeStateMachine {
                     }
                     Some('<') => {
                         self.state = State::TagOpen;
+                        None
+                    }
+                    None => Some(vec![HtmlToken::Eof]),
+                    Some(c) => Some(vec![HtmlToken::Char(c)]),
+                }
+            }
+            State::Rawtext => {
+                let c = self.consume_next_input();
+                match c {
+                    Some('<') => {
+                        self.state = State::ScriptDataLessThanSign;
                         None
                     }
                     None => Some(vec![HtmlToken::Eof]),

@@ -82,7 +82,7 @@ fn default_style(node_data: &NodeData) -> ComputedStyle {
             ..
         }) => unreachable!(),
         NodeData::Element(Element {
-            kind: ElementKind::Svg | ElementKind::SvgStyle | ElementKind::SvgA,
+            kind: ElementKind::Img | ElementKind::Svg | ElementKind::SvgStyle | ElementKind::SvgA,
             ..
         }) => unimplemented!(),
         NodeData::Text(_) => DisplayType::Inline,

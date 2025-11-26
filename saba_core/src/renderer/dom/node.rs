@@ -68,6 +68,7 @@ pub enum ElementKind {
     A,
     Textarea,
     Script,
+    Img,
     Svg,
     SvgStyle,
     SvgA,
@@ -88,6 +89,7 @@ impl ElementKind {
                 "a" => Some(Self::A),
                 "textarea" => Some(Self::Textarea),
                 "script" => Some(Self::Script),
+                "img" => Some(Self::Img),
                 _ => None,
             },
             Namespace::Svg => match local_name {
@@ -111,6 +113,7 @@ impl ElementKind {
             Self::A => Namespace::Html,
             Self::Textarea => Namespace::Html,
             Self::Script => Namespace::Html,
+            Self::Img => Namespace::Html,
 
             Self::Svg => Namespace::Svg,
             Self::SvgStyle => Namespace::Svg,
@@ -159,6 +162,7 @@ impl Display for ElementKind {
             Self::A => write!(f, "a"),
             Self::Textarea => write!(f, "textarea"),
             Self::Script => write!(f, "script"),
+            Self::Img => write!(f, "img"),
             Self::Svg => write!(f, "svg"),
             Self::SvgStyle => write!(f, "style"),
             Self::SvgA => write!(f, "a"),

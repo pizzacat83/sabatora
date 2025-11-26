@@ -153,6 +153,7 @@ impl HtmlParser {
                     self.insert_character(*c);
                     StepOutput::default()
                 }
+                HtmlToken::Eof => StepOutput::default(),
                 HtmlToken::EndTag { tag } if tag == "body" => {
                     if self.stack_has_element_in_scope(|e| e.tag_name() == &ElementKind::Body) {
                         self.mode = InsertionMode::AfterBody;
@@ -205,6 +206,12 @@ impl HtmlParser {
                     self.insert_element_for_token(token);
                     StepOutput::default()
                 }
+                HtmlToken::StartTag { tag, .. } if tag == "img" => {
+                    self.insert_element_for_token(token);
+                    self.stack_of_open_elements.pop();
+
+                    StepOutput::default()
+                }
                 HtmlToken::EndTag { tag } if tag == "h1" || tag == "h2" => {
                     if !self.stack_has_element_in_scope(|e| {
                         [ElementKind::H1, ElementKind::H2].contains(e.tag_name())
@@ -250,6 +257,9 @@ impl HtmlParser {
                         ..Default::default()
                     }
                 }
+                HtmlToken::StartTag { tag, .. } if tag == "style" => {
+                    self.parse_raw_text_element(token)
+                }
 
                 HtmlToken::StartTag {
                     tag, self_closing, ..
@@ -282,7 +292,7 @@ impl HtmlParser {
                     }
                     StepOutput::default()
                 }
-                _ => unimplemented!(),
+                _ => unimplemented!("unimplemented: {token:?}"),
             },
             InsertionMode::AfterBody => match token {
                 HtmlToken::Char('\t' | '\n' | '\x0c' | '\r' | ' ') => StepOutput::default(),
@@ -329,19 +339,96 @@ impl HtmlParser {
 
     fn process_token_in_foreign_content(&mut self, token: &HtmlToken) -> StepOutput {
         match token {
-            // TODO: more tags
-            HtmlToken::StartTag { tag, .. } if tag == "br" || tag == "p" => {
-                unimplemented!()
+            HtmlToken::StartTag { tag, .. }
+                if [
+                    "b",
+                    "big",
+                    "blockquote",
+                    "body",
+                    "br",
+                    "center",
+                    "code",
+                    "dd",
+                    "div",
+                    "dl",
+                    "dt",
+                    "em",
+                    "embed",
+                    "h1",
+                    "h2",
+                    "h3",
+                    "h4",
+                    "h5",
+                    "h6",
+                    "head",
+                    "hr",
+                    "i",
+                    "img",
+                    "li",
+                    "listing",
+                    "menu",
+                    "meta",
+                    "nobr",
+                    "ol",
+                    "p",
+                    "pre",
+                    "ruby",
+                    "s",
+                    "small",
+                    "span",
+                    "strong",
+                    "strike",
+                    "sub",
+                    "sup",
+                    "table",
+                    "tt",
+                    "u",
+                    "ul",
+                    "var",
+                ]
+                .iter()
+                .any(|t| *t == tag) =>
+            {
+                self.pop_stack_of_open_elements_while(|node| {
+                    let element_kind = {
+                        if let NodeData::Element(e) = node.borrow().data() {
+                            Some(e.kind.clone())
+                        } else {
+                            None
+                        }
+                    };
+
+                    element_kind
+                        .map(|kind|
+                    // TODO: false if MathML|HTML text integration point
+                        kind.namespace() != Namespace::Html)
+                        .unwrap_or(false)
+                });
+
+                self.process_token_based_on_mode(token)
             }
-            // TODO: more tags
-            // HtmlToken::EndTag { tag } if tag == "br" || tag == "p" => {
-            //     unimplemented!()
-            // }
-            HtmlToken::StartTag {
-                tag,
-                self_closing,
-                attributes,
-            } => {
+
+            // Comment out here to reproduce CVE-2020-6413!
+            HtmlToken::EndTag { tag } if tag == "br" || tag == "p" => {
+                self.pop_stack_of_open_elements_while(|node| {
+                    let element_kind = {
+                        if let NodeData::Element(e) = node.borrow().data() {
+                            Some(e.kind.clone())
+                        } else {
+                            None
+                        }
+                    };
+
+                    element_kind
+                        .map(|kind|
+                    // TODO: false if MathML|HTML text integration point
+                        kind.namespace() != Namespace::Html)
+                        .unwrap_or(false)
+                });
+
+                self.process_token_based_on_mode(token)
+            }
+            HtmlToken::StartTag { self_closing, .. } => {
                 let adjusted_current_node_namespace = self
                     .adjusted_current_node()
                     .and_then(|node| {
@@ -565,6 +652,19 @@ impl HtmlParser {
         }
     }
 
+    fn pop_stack_of_open_elements_while<P>(&mut self, mut continuing_condition: P)
+    where
+        P: FnMut(Rc<RefCell<Node>>) -> bool,
+    {
+        while let Some(open_element) = self.stack_of_open_elements.last() {
+            if !continuing_condition(Rc::clone(open_element)) {
+                break;
+            }
+
+            self.stack_of_open_elements.pop();
+        }
+    }
+
     fn pop_stack_of_open_elements_up_to_including<P>(&mut self, mut terminating_condition: P)
     where
         P: FnMut(Rc<RefCell<Node>>) -> bool,
@@ -589,6 +689,18 @@ impl HtmlParser {
                 _ => false,
             }
         })
+    }
+
+    fn parse_raw_text_element(&mut self, token: &HtmlToken) -> StepOutput {
+        self.insert_element_for_token(token);
+
+        self.original_insertion_mode = self.mode.clone();
+        self.mode = InsertionMode::Text;
+
+        StepOutput {
+            set_tokenizer_state: Some(token::State::Rawtext),
+            ..Default::default()
+        }
     }
 }
 
