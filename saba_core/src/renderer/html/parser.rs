@@ -973,13 +973,30 @@ mod tests {
     #[test]
     fn test_cve_2020_6413() {
         let html = r#"<!doctype html><html><head></head><body><svg></p><style><a id="</style><img src=1 onerror=alert(1)>"></body></html>"#.to_string();
-        let t = HtmlTokenizer::new(html);
-        let window = HtmlParser::new(t).construct_tree();
+        let document0 = {
+            let t = HtmlTokenizer::new(html);
+            let window = HtmlParser::new(t).construct_tree();
 
-        let document = window.borrow().document();
-        assert_eq!(&NodeData::Document, document.borrow().data());
+            let document = window.borrow().document();
+            assert_eq!(&NodeData::Document, document.borrow().data());
+            Node::assert_tree_structure(document.clone());
+            eprintln!("tree:\n{}", Node::build_ascii_tree(Rc::clone(&document)));
+            document
+        };
+        let serialized = document0.borrow().inner_html();
+        eprintln!("serialized: \n{serialized}");
 
-        Node::assert_tree_structure(document.clone());
-        eprintln!("tree:\n{}", Node::build_ascii_tree(Rc::clone(&document)));
+        {
+            let t = HtmlTokenizer::new(serialized);
+            let window = HtmlParser::new(t).construct_tree();
+
+            let document = window.borrow().document();
+            assert_eq!(&NodeData::Document, document.borrow().data());
+            Node::assert_tree_structure(document.clone());
+            eprintln!(
+                "tree (re-parsed):\n{}",
+                Node::build_ascii_tree(Rc::clone(&document))
+            );
+        };
     }
 }

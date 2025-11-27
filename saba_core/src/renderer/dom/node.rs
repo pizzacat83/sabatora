@@ -7,7 +7,7 @@ use alloc::{
     vec::Vec,
 };
 
-use crate::renderer::html::attribute::Attribute;
+use crate::renderer::html::{self, attribute::Attribute};
 
 #[derive(Debug, Clone)]
 pub struct Node {
@@ -317,6 +317,11 @@ impl Node {
         }
 
         content
+    }
+
+    /// <https://html.spec.whatwg.org/multipage/dynamic-markup-insertion.html#the-innerhtml-property>
+    pub fn inner_html(&self) -> String {
+        html::serialize::serialize(self)
     }
 }
 
