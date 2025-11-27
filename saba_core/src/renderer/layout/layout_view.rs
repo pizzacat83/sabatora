@@ -81,6 +81,10 @@ fn default_style(node_data: &NodeData) -> ComputedStyle {
             kind: ElementKind::Html,
             ..
         }) => unreachable!(),
+        NodeData::Element(Element {
+            kind: ElementKind::Svg,
+            ..
+        }) => unimplemented!(),
         NodeData::Text(_) => DisplayType::Inline,
         NodeData::Document => unreachable!(),
     };

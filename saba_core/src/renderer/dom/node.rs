@@ -68,8 +68,57 @@ pub enum ElementKind {
     A,
     Textarea,
     Script,
+    Svg,
+    // Note: Maybe a fully-qualified name like SVGSVGElement is better?
 }
 
+impl ElementKind {
+    fn from_name(local_name: &str, namespace: Namespace) -> Option<Self> {
+        match namespace {
+            Namespace::Html => match local_name {
+                "html" => Some(Self::Html),
+                "head" => Some(Self::Head),
+                "style" => Some(Self::Style),
+                "body" => Some(Self::Body),
+                "p" => Some(Self::P),
+                "h1" => Some(Self::H1),
+                "h2" => Some(Self::H2),
+                "a" => Some(Self::A),
+                "textarea" => Some(Self::Textarea),
+                "script" => Some(Self::Script),
+                _ => None,
+            },
+            Namespace::Svg => match local_name {
+                "svg" => Some(Self::Svg),
+                _ => None,
+            },
+        }
+    }
+
+    pub fn namespace(&self) -> Namespace {
+        match self {
+            Self::Html => Namespace::Html,
+            Self::Head => Namespace::Html,
+            Self::Style => Namespace::Html,
+            Self::Body => Namespace::Html,
+            Self::P => Namespace::Html,
+            Self::H1 => Namespace::Html,
+            Self::H2 => Namespace::Html,
+            Self::A => Namespace::Html,
+            Self::Textarea => Namespace::Html,
+            Self::Script => Namespace::Html,
+            Self::Svg => Namespace::Svg,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Namespace {
+    Html,
+    Svg,
+}
+
+// Warn: This assumes the tag is in the HTML namespace.
 impl TryFrom<&str> for ElementKind {
     type Error = String;
 
@@ -103,6 +152,7 @@ impl Display for ElementKind {
             Self::A => write!(f, "a"),
             Self::Textarea => write!(f, "textarea"),
             Self::Script => write!(f, "script"),
+            Self::Svg => write!(f, "svg"),
         }
     }
 }
@@ -146,10 +196,14 @@ impl Node {
         self.last_child.upgrade()
     }
 
-    pub fn create_element(document: Rc<RefCell<Node>>, local_name: &str) -> Rc<RefCell<Node>> {
+    pub fn create_element(
+        document: Rc<RefCell<Node>>,
+        local_name: &str,
+        namespace: Namespace,
+    ) -> Rc<RefCell<Node>> {
         let element = Node {
             data: NodeData::Element(Element {
-                kind: ElementKind::try_from(local_name).unwrap(),
+                kind: ElementKind::from_name(local_name, namespace).unwrap(),
                 attributes: Vec::new(),
             }),
             window: document.borrow().window.clone(),

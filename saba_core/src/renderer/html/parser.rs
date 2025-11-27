@@ -7,7 +7,7 @@ use alloc::{
     vec::Vec,
 };
 
-use crate::renderer::dom::node::{Element, ElementKind, Node, NodeData, Window};
+use crate::renderer::dom::node::{Element, ElementKind, Namespace, Node, NodeData, Window};
 
 use super::{
     attribute::Attribute,
@@ -51,241 +51,284 @@ impl HtmlParser {
     }
 
     fn step(&mut self, token: &HtmlToken) -> StepOutput {
-        match self.mode {
-            InsertionMode::Initial => match token {
-                HtmlToken::Char('\t' | '\n' | '\x0c' | ' ') => StepOutput::default(),
-                HtmlToken::DoctypeTag { .. } => {
-                    self.mode = InsertionMode::BeforeHtml;
-                    StepOutput::default()
-                }
-                _ => {
-                    self.mode = InsertionMode::BeforeHtml;
-                    StepOutput {
-                        reprocess: true,
-                        ..Default::default()
-                    }
-                }
-            },
-            InsertionMode::BeforeHtml => {
-                match token {
-                    HtmlToken::StartTag { tag, .. } if tag == "html" => {
-                        let element = self.create_element_for_token(token, self.document());
-                        Node::append_child(self.document(), Rc::clone(&element));
-                        self.stack_of_open_elements.push(Rc::clone(&element));
-                        self.mode = InsertionMode::BeforeHead;
-                        StepOutput::default()
-                    }
-                    HtmlToken::EndTag { tag: _ } => StepOutput::default(),
-                    _ => {
-                        // TODO
-                        self.mode = InsertionMode::BeforeHead;
-                        unimplemented!()
-                    }
-                }
+        let adjusted_current_node_namespace = self.adjusted_current_node().and_then(|node| {
+            // TODO: more cases?
+            if let NodeData::Element(e) = &node.borrow().data {
+                Some(e.kind.namespace())
+            } else {
+                None
             }
-            InsertionMode::BeforeHead => match token {
-                HtmlToken::Char('\t' | '\n' | '\x0c' | '\r' | ' ') => StepOutput::default(),
-                HtmlToken::StartTag { tag, .. } if tag == "head" => {
-                    self.insert_element_for_token(token);
-                    self.mode = InsertionMode::InHead;
-                    StepOutput::default()
-                }
-                _ => unimplemented!(),
-            },
-            InsertionMode::InHead => match token {
-                HtmlToken::Char('\t' | '\n' | '\x0c' | '\r' | ' ') => StepOutput::default(),
-                HtmlToken::EndTag { tag } if tag == "head" => {
-                    self.stack_of_open_elements.pop();
-                    self.mode = InsertionMode::AfterHead;
-                    StepOutput::default()
-                }
-                _ => unimplemented!(),
-            },
-            InsertionMode::AfterHead => match token {
-                HtmlToken::Char(c) if ['\t', '\n', '\x0c', '\r', ' '].contains(c) => {
-                    self.insert_character(*c);
-                    StepOutput::default()
-                }
-                HtmlToken::StartTag { tag, .. } if tag == "body" => {
-                    self.insert_element_for_token(token);
-                    self.mode = InsertionMode::InBody;
-                    StepOutput::default()
-                }
-                _ => {
-                    self.insert_element_for_token(&HtmlToken::StartTag {
-                        tag: "body".to_string(),
-                        self_closing: false,
-                        attributes: Vec::new(),
-                    });
-                    self.mode = InsertionMode::InBody;
-                    StepOutput {
-                        reprocess: true,
-                        ..Default::default()
-                    }
-                }
-            },
-            InsertionMode::InBody => match token {
-                HtmlToken::Char(c @ ('\t' | '\n' | '\x0c' | '\r' | ' ')) => {
-                    self.insert_character(*c);
-                    StepOutput::default()
-                }
-                HtmlToken::Char(c) => {
-                    self.insert_character(*c);
-                    StepOutput::default()
-                }
-                HtmlToken::EndTag { tag } if tag == "body" => {
-                    if self.stack_has_element_in_scope(|e| e.tag_name() == &ElementKind::Body) {
-                        self.mode = InsertionMode::AfterBody;
-                        StepOutput::default()
-                    } else {
+        });
+        if self.stack_of_open_elements.is_empty()
+            || adjusted_current_node_namespace == Some(Namespace::Html)
+            || token == &HtmlToken::Eof
+        {
+            match self.mode {
+                InsertionMode::Initial => match token {
+                    HtmlToken::Char('\t' | '\n' | '\x0c' | ' ') => StepOutput::default(),
+                    HtmlToken::DoctypeTag { .. } => {
+                        self.mode = InsertionMode::BeforeHtml;
                         StepOutput::default()
                     }
-                }
-                HtmlToken::StartTag { tag, .. } if tag == "p" => {
-                    if self.stack_has_element_in_button_scope(|e| e.tag_name() == &ElementKind::P) {
-                        self.close_p_element();
+                    _ => {
+                        self.mode = InsertionMode::BeforeHtml;
+                        StepOutput {
+                            reprocess: true,
+                            ..Default::default()
+                        }
                     }
-                    self.insert_element_for_token(token);
-                    StepOutput::default()
+                },
+                InsertionMode::BeforeHtml => {
+                    match token {
+                        HtmlToken::StartTag { tag, .. } if tag == "html" => {
+                            let element = self.create_element_for_token(
+                                token,
+                                Namespace::Html,
+                                self.document(),
+                            );
+                            Node::append_child(self.document(), Rc::clone(&element));
+                            self.stack_of_open_elements.push(Rc::clone(&element));
+                            self.mode = InsertionMode::BeforeHead;
+                            StepOutput::default()
+                        }
+                        HtmlToken::EndTag { tag: _ } => StepOutput::default(),
+                        _ => {
+                            // TODO
+                            self.mode = InsertionMode::BeforeHead;
+                            unimplemented!()
+                        }
+                    }
                 }
-                HtmlToken::EndTag { tag } if tag == "p" => {
-                    if !self.stack_has_element_in_button_scope(|e| e.tag_name() == &ElementKind::P)
-                    {
+                InsertionMode::BeforeHead => match token {
+                    HtmlToken::Char('\t' | '\n' | '\x0c' | '\r' | ' ') => StepOutput::default(),
+                    HtmlToken::StartTag { tag, .. } if tag == "head" => {
+                        self.insert_element_for_token(token);
+                        self.mode = InsertionMode::InHead;
+                        StepOutput::default()
+                    }
+                    _ => unimplemented!(),
+                },
+                InsertionMode::InHead => match token {
+                    HtmlToken::Char('\t' | '\n' | '\x0c' | '\r' | ' ') => StepOutput::default(),
+                    HtmlToken::EndTag { tag } if tag == "head" => {
+                        self.stack_of_open_elements.pop();
+                        self.mode = InsertionMode::AfterHead;
+                        StepOutput::default()
+                    }
+                    _ => unimplemented!(),
+                },
+                InsertionMode::AfterHead => match token {
+                    HtmlToken::Char(c) if ['\t', '\n', '\x0c', '\r', ' '].contains(c) => {
+                        self.insert_character(*c);
+                        StepOutput::default()
+                    }
+                    HtmlToken::StartTag { tag, .. } if tag == "body" => {
+                        self.insert_element_for_token(token);
+                        self.mode = InsertionMode::InBody;
+                        StepOutput::default()
+                    }
+                    _ => {
                         self.insert_element_for_token(&HtmlToken::StartTag {
-                            tag: "p".to_string(),
+                            tag: "body".to_string(),
                             self_closing: false,
                             attributes: Vec::new(),
                         });
-                    }
-                    self.close_p_element();
-                    StepOutput::default()
-                }
-                HtmlToken::StartTag { tag, .. } if tag == "h1" || tag == "h2" => {
-                    if self.stack_has_element_in_button_scope(|e| e.tag_name() == &ElementKind::P) {
-                        self.close_p_element();
-                    }
-                    let has_open_heading = self
-                        .stack_of_open_elements
-                        .last()
-                        .map(|node| {
-                            if let NodeData::Element(element) = node.borrow().data() {
-                                [ElementKind::H1, ElementKind::H2].contains(element.tag_name())
-                            } else {
-                                false
-                            }
-                        })
-                        .unwrap_or_default();
-                    if has_open_heading {
-                        self.stack_of_open_elements.pop();
-                    }
-                    self.insert_element_for_token(token);
-                    StepOutput::default()
-                }
-                HtmlToken::StartTag { tag, .. } if tag == "a" => {
-                    self.insert_element_for_token(token);
-                    StepOutput::default()
-                }
-                HtmlToken::EndTag { tag } if tag == "h1" || tag == "h2" => {
-                    if !self.stack_has_element_in_scope(|e| {
-                        [ElementKind::H1, ElementKind::H2].contains(e.tag_name())
-                    }) {
-                        StepOutput::default()
-                    } else {
-                        self.generate_implied_end_tags();
-                        self.pop_stack_of_open_elements_up_to_including(|node| {
-                            match node.borrow().data() {
-                                NodeData::Element(element) => {
-                                    [ElementKind::H1, ElementKind::H2].contains(element.tag_name())
-                                }
-                                _ => false,
-                            }
-                        });
-                        StepOutput::default()
-                    }
-                }
-                HtmlToken::StartTag { tag, .. } if tag == "textarea" => {
-                    self.insert_element_for_token(token);
-                    // TODO: ignore next LF
-                    self.original_insertion_mode = self.mode.clone();
-                    self.mode = InsertionMode::Text;
-                    StepOutput {
-                        set_tokenizer_state: Some(token::State::Rcdata),
-                        ..Default::default()
-                    }
-                }
-                HtmlToken::StartTag { tag, .. } if tag == "script" => {
-                    let adjusted_insertion_location =
-                        self.calc_appropriate_insertion_location_for_inserting_node();
-                    let element = self.create_element_for_token(
-                        token,
-                        adjusted_insertion_location.intended_parent(),
-                    );
-                    adjusted_insertion_location.insert(Rc::clone(&element));
-                    self.stack_of_open_elements.push(Rc::clone(&element));
-                    self.original_insertion_mode = self.mode.clone();
-                    self.mode = InsertionMode::Text;
-                    StepOutput {
-                        set_tokenizer_state: Some(token::State::ScriptData),
-                        ..Default::default()
-                    }
-                }
-
-                HtmlToken::EndTag { tag } => {
-                    for node in self.stack_of_open_elements.iter().rev().map(Rc::clone) {
-                        if let NodeData::Element(element) = node.borrow().data() {
-                            if &element.tag_name().to_string() == tag {
-                                self.generate_implied_end_tags_except_for(&[tag]);
-                                self.pop_stack_of_open_elements_up_to_including_node(Rc::clone(
-                                    &node,
-                                ));
-                                break;
-                            }
+                        self.mode = InsertionMode::InBody;
+                        StepOutput {
+                            reprocess: true,
+                            ..Default::default()
                         }
                     }
-                    StepOutput::default()
-                }
-                _ => unimplemented!(),
-            },
-            InsertionMode::AfterBody => match token {
-                HtmlToken::Char('\t' | '\n' | '\x0c' | '\r' | ' ') => StepOutput::default(),
-                HtmlToken::EndTag { tag } if tag == "html" => {
-                    self.mode = InsertionMode::AfterAfterBody;
-                    StepOutput::default()
-                }
-                _ => unimplemented!(),
-            },
-            InsertionMode::AfterAfterBody => match token {
-                HtmlToken::Char('\t' | '\n' | '\x0c' | '\r' | ' ') => StepOutput::default(),
-                HtmlToken::Eof => StepOutput {
-                    stop: true,
-                    ..Default::default()
                 },
-                _ => unimplemented!(),
-            },
-            InsertionMode::Text => match token {
-                HtmlToken::Char(c) => {
-                    self.insert_character(*c);
-                    StepOutput::default()
-                }
-                HtmlToken::EndTag { tag } if tag == "script" => {
-                    self.stack_of_open_elements.pop().unwrap();
-                    self.mode = self.original_insertion_mode.clone();
-                    StepOutput::default()
-                }
-                HtmlToken::EndTag { .. } => {
-                    self.stack_of_open_elements.pop();
-                    self.mode = self.original_insertion_mode.clone();
-                    // TODO: handle reentrance
-                    // TODO: prepare the script element
-                    StepOutput {
-                        set_tokenizer_state: Some(token::State::Data),
-                        ..Default::default()
+                InsertionMode::InBody => match token {
+                    HtmlToken::Char(c @ ('\t' | '\n' | '\x0c' | '\r' | ' ')) => {
+                        self.insert_character(*c);
+                        StepOutput::default()
                     }
-                }
-                _ => unreachable!(),
-            },
+                    HtmlToken::Char(c) => {
+                        self.insert_character(*c);
+                        StepOutput::default()
+                    }
+                    HtmlToken::EndTag { tag } if tag == "body" => {
+                        if self.stack_has_element_in_scope(|e| e.tag_name() == &ElementKind::Body) {
+                            self.mode = InsertionMode::AfterBody;
+                            StepOutput::default()
+                        } else {
+                            StepOutput::default()
+                        }
+                    }
+                    HtmlToken::StartTag { tag, .. } if tag == "p" => {
+                        if self
+                            .stack_has_element_in_button_scope(|e| e.tag_name() == &ElementKind::P)
+                        {
+                            self.close_p_element();
+                        }
+                        self.insert_element_for_token(token);
+                        StepOutput::default()
+                    }
+                    HtmlToken::EndTag { tag } if tag == "p" => {
+                        if !self
+                            .stack_has_element_in_button_scope(|e| e.tag_name() == &ElementKind::P)
+                        {
+                            self.insert_element_for_token(&HtmlToken::StartTag {
+                                tag: "p".to_string(),
+                                self_closing: false,
+                                attributes: Vec::new(),
+                            });
+                        }
+                        self.close_p_element();
+                        StepOutput::default()
+                    }
+                    HtmlToken::StartTag { tag, .. } if tag == "h1" || tag == "h2" => {
+                        if self
+                            .stack_has_element_in_button_scope(|e| e.tag_name() == &ElementKind::P)
+                        {
+                            self.close_p_element();
+                        }
+                        let has_open_heading = self
+                            .stack_of_open_elements
+                            .last()
+                            .map(|node| {
+                                if let NodeData::Element(element) = node.borrow().data() {
+                                    [ElementKind::H1, ElementKind::H2].contains(element.tag_name())
+                                } else {
+                                    false
+                                }
+                            })
+                            .unwrap_or_default();
+                        if has_open_heading {
+                            self.stack_of_open_elements.pop();
+                        }
+                        self.insert_element_for_token(token);
+                        StepOutput::default()
+                    }
+                    HtmlToken::StartTag { tag, .. } if tag == "a" => {
+                        self.insert_element_for_token(token);
+                        StepOutput::default()
+                    }
+                    HtmlToken::EndTag { tag } if tag == "h1" || tag == "h2" => {
+                        if !self.stack_has_element_in_scope(|e| {
+                            [ElementKind::H1, ElementKind::H2].contains(e.tag_name())
+                        }) {
+                            StepOutput::default()
+                        } else {
+                            self.generate_implied_end_tags();
+                            self.pop_stack_of_open_elements_up_to_including(|node| {
+                                match node.borrow().data() {
+                                    NodeData::Element(element) => {
+                                        [ElementKind::H1, ElementKind::H2]
+                                            .contains(element.tag_name())
+                                    }
+                                    _ => false,
+                                }
+                            });
+                            StepOutput::default()
+                        }
+                    }
+                    HtmlToken::StartTag { tag, .. } if tag == "textarea" => {
+                        self.insert_element_for_token(token);
+                        // TODO: ignore next LF
+                        self.original_insertion_mode = self.mode.clone();
+                        self.mode = InsertionMode::Text;
+                        StepOutput {
+                            set_tokenizer_state: Some(token::State::Rcdata),
+                            ..Default::default()
+                        }
+                    }
+                    HtmlToken::StartTag { tag, .. } if tag == "script" => {
+                        let adjusted_insertion_location =
+                            self.calc_appropriate_insertion_location_for_inserting_node();
+                        let element = self.create_element_for_token(
+                            token,
+                            Namespace::Html,
+                            adjusted_insertion_location.intended_parent(),
+                        );
+                        adjusted_insertion_location.insert(Rc::clone(&element));
+                        self.stack_of_open_elements.push(Rc::clone(&element));
+                        self.original_insertion_mode = self.mode.clone();
+                        self.mode = InsertionMode::Text;
+                        StepOutput {
+                            set_tokenizer_state: Some(token::State::ScriptData),
+                            ..Default::default()
+                        }
+                    }
 
-            _ => unimplemented!(),
+                    HtmlToken::StartTag {
+                        tag, self_closing, ..
+                    } if tag == "svg" => {
+                        // TODO: Reconstruct active formatting elements
+                        // TODO: Adjust SVG attributes
+                        // TODO: Adjust foreign attributes
+
+                        // TODO: Insert a foreign element(SVG namespace, false)
+                        self.insert_foreign_element_for_token(token, Namespace::Svg, false);
+
+                        if *self_closing {
+                            unimplemented!()
+                        }
+
+                        StepOutput::default()
+                    }
+
+                    HtmlToken::EndTag { tag } => {
+                        for node in self.stack_of_open_elements.iter().rev().map(Rc::clone) {
+                            if let NodeData::Element(element) = node.borrow().data() {
+                                if &element.tag_name().to_string() == tag {
+                                    self.generate_implied_end_tags_except_for(&[tag]);
+                                    self.pop_stack_of_open_elements_up_to_including_node(
+                                        Rc::clone(&node),
+                                    );
+                                    break;
+                                }
+                            }
+                        }
+                        StepOutput::default()
+                    }
+                    _ => unimplemented!(),
+                },
+                InsertionMode::AfterBody => match token {
+                    HtmlToken::Char('\t' | '\n' | '\x0c' | '\r' | ' ') => StepOutput::default(),
+                    HtmlToken::EndTag { tag } if tag == "html" => {
+                        self.mode = InsertionMode::AfterAfterBody;
+                        StepOutput::default()
+                    }
+                    _ => unimplemented!(),
+                },
+                InsertionMode::AfterAfterBody => match token {
+                    HtmlToken::Char('\t' | '\n' | '\x0c' | '\r' | ' ') => StepOutput::default(),
+                    HtmlToken::Eof => StepOutput {
+                        stop: true,
+                        ..Default::default()
+                    },
+                    _ => unimplemented!(),
+                },
+                InsertionMode::Text => match token {
+                    HtmlToken::Char(c) => {
+                        self.insert_character(*c);
+                        StepOutput::default()
+                    }
+                    HtmlToken::EndTag { tag } if tag == "script" => {
+                        self.stack_of_open_elements.pop().unwrap();
+                        self.mode = self.original_insertion_mode.clone();
+                        StepOutput::default()
+                    }
+                    HtmlToken::EndTag { .. } => {
+                        self.stack_of_open_elements.pop();
+                        self.mode = self.original_insertion_mode.clone();
+                        // TODO: handle reentrance
+                        // TODO: prepare the script element
+                        StepOutput {
+                            set_tokenizer_state: Some(token::State::Data),
+                            ..Default::default()
+                        }
+                    }
+                    _ => unreachable!(),
+                },
+
+                _ => unimplemented!(),
+            }
+        } else {
+            unimplemented!()
         }
     }
 
@@ -296,6 +339,7 @@ impl HtmlParser {
     fn create_element_for_token(
         &self,
         token: &HtmlToken,
+        namespace: Namespace,
         intended_parent: Rc<RefCell<Node>>,
     ) -> Rc<RefCell<Node>> {
         let local_name: &str;
@@ -312,24 +356,28 @@ impl HtmlParser {
             unimplemented!("not a start tag");
         }
         let document = intended_parent.borrow().node_document();
-        let element = Node::create_element(document, local_name);
+        let element = Node::create_element(document, local_name, namespace);
         element.borrow_mut().extend_element_attributes(attributes);
         element
     }
 
     fn insert_element_for_token(&mut self, token: &HtmlToken) -> Rc<RefCell<Node>> {
-        self.insert_foreign_element_for_token(token, false)
+        self.insert_foreign_element_for_token(token, Namespace::Html, false)
     }
 
     fn insert_foreign_element_for_token(
         &mut self,
         token: &HtmlToken,
+        namespace: Namespace,
         only_add_to_element_stack: bool,
     ) -> Rc<RefCell<Node>> {
         let adjusted_inserted_location =
             self.calc_appropriate_insertion_location_for_inserting_node();
-        let element =
-            self.create_element_for_token(token, adjusted_inserted_location.intended_parent());
+        let element = self.create_element_for_token(
+            token,
+            namespace,
+            adjusted_inserted_location.intended_parent(),
+        );
         if !only_add_to_element_stack {
             adjusted_inserted_location.insert(Rc::clone(&element));
         }
@@ -344,6 +392,10 @@ impl HtmlParser {
 
     fn current_node(&self) -> Option<Rc<RefCell<Node>>> {
         self.stack_of_open_elements.last().map(Rc::clone)
+    }
+
+    fn adjusted_current_node(&self) -> Option<Rc<RefCell<Node>>> {
+        self.current_node()
     }
 
     fn stack_has_element_in_scope<P>(&self, predicate: P) -> bool
