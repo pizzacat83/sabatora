@@ -409,25 +409,25 @@ impl HtmlParser {
             }
 
             // Comment out here to reproduce CVE-2020-6413!
-            HtmlToken::EndTag { tag } if tag == "br" || tag == "p" => {
-                self.pop_stack_of_open_elements_while(|node| {
-                    let element_kind = {
-                        if let NodeData::Element(e) = node.borrow().data() {
-                            Some(e.kind.clone())
-                        } else {
-                            None
-                        }
-                    };
+            // HtmlToken::EndTag { tag } if tag == "br" || tag == "p" => {
+            //     self.pop_stack_of_open_elements_while(|node| {
+            //         let element_kind = {
+            //             if let NodeData::Element(e) = node.borrow().data() {
+            //                 Some(e.kind.clone())
+            //             } else {
+            //                 None
+            //             }
+            //         };
 
-                    element_kind
-                        .map(|kind|
-                    // TODO: false if MathML|HTML text integration point
-                        kind.namespace() != Namespace::Html)
-                        .unwrap_or(false)
-                });
+            //         element_kind
+            //             .map(|kind|
+            //         // TODO: false if MathML|HTML text integration point
+            //             kind.namespace() != Namespace::Html)
+            //             .unwrap_or(false)
+            //     });
 
-                self.process_token_based_on_mode(token)
-            }
+            //     self.process_token_based_on_mode(token)
+            // }
             HtmlToken::StartTag { self_closing, .. } => {
                 let adjusted_current_node_namespace = self
                     .adjusted_current_node()

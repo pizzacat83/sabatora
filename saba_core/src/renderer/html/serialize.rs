@@ -78,8 +78,8 @@ fn escape_attribute_value(input: &str) -> String {
         // introduced on 2025-05 to escape <> in attribute values
         // HTML Standard: <https://github.com/whatwg/html/commit/e21bd3b4a94bfdbc23d863128e0b207be9821a0f>
         // Chrome: <https://developer.chrome.com/blog/escape-attributes>
-        .replace('<', "&lt;")
-        .replace('>', "&gt;")
+        // .replace('<', "&lt;")
+        // .replace('>', "&gt;")
         // end of comment out
         .replace('"', "&quot;")
 }
